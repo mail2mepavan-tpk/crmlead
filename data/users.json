@@ -1,0 +1,45 @@
+[
+  {
+    "id": 1779796999819,
+    "fullName": "Pavan Kumar Talikota",
+    "email": "mail2me.pavan@gmail.com",
+    "username": "mail2me.pavan@gmail.com",
+    "password": "Admin123",
+    "role": "Admin",
+    "phone": "+917997573805",
+    "createdAt": "2026-05-26T12:03:19.819Z"
+  },
+  {
+    "id": 1779797357410,
+    "fullName": "test",
+    "email": "test@gmail.com",
+    "username": "test",
+    "password": "User123",
+    "role": "Executive",
+    "phone": "+917997573805",
+    "createdAt": "2026-05-26T12:09:17.410Z",
+    "updatedAt": "2026-06-05T11:04:18.508Z"
+  },
+  {
+    "id": 1780657651034,
+    "fullName": "testdata",
+    "email": "ge@gmail.com",
+    "username": "de",
+    "password": "123456",
+    "role": "Manager",
+    "phone": "+917997573805",
+    "createdAt": "2026-06-05T11:07:31.034Z",
+    "updatedAt": "2026-06-05T11:14:45.310Z"
+  },
+  {
+    "id": 1780657947189,
+    "fullName": "Tharun",
+    "email": "me.pavan@gmail.com",
+    "username": "me.pavan@gmail.com",
+    "password": "T4Ak$Gi_GAyJhp",
+    "role": "Manager",
+    "phone": "+917997573805",
+    "createdAt": "2026-06-05T11:12:27.189Z",
+    "updatedAt": "2026-06-05T11:22:08.744Z"
+  }
+]

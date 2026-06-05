@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1780409745350,
+    "companyName": "Aromi",
+    "address": "123 street",
+    "city": "Mumbai",
+    "state": "MH",
+    "country": "India",
+    "pinZip": "400001",
+    "industry": "Manuafactuirng",
+    "website": "",
+    "phone": "+917997573805",
+    "employees": "10",
+    "annualRevenue": "100000",
+    "region": "West",
+    "status": "Active",
+    "health": "Green",
+    "owner": "Jane Test",
+    "startDate": "2026-06-02",
+    "gstNumber": "27AAAAAAA567A",
+    "description": "Summary",
+    "notes": "Notes",
+    "tasks": "Account tasks",
+    "leads": [],
+    "contacts": [],
+    "deals": [],
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T14:15:45.350Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T14:16:29.323Z"
+  }
+]

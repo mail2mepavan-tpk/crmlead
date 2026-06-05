@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1780412755242,
+    "title": "test",
+    "receivedDate": "2026-06-02",
+    "salesPoc": "POCName",
+    "salutation": "Mr",
+    "leadContact": "Pavan Kumar",
+    "leadContactId": 1780410712975,
+    "leadStatus": "Qualified",
+    "leadRating": "Warm",
+    "nextContactDate": "2026-07-11",
+    "leadRegion": "KA",
+    "leadSource": "NewPaper Marketing",
+    "referredBy": "test",
+    "notes": "",
+    "description": "test",
+    "productType": "test",
+    "targetDealAmount": "15000",
+    "attachments": "",
+    "companyName": "ACME",
+    "companyId": "",
+    "tasks": "e345423",
+    "activities": "345",
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T15:05:55.242Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T15:05:55.242Z"
+  }
+]

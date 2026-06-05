@@ -1,0 +1,46 @@
+[
+  {
+    "id": 1780050223160,
+    "enquiryNo": "34253245",
+    "salesPoc": "3425",
+    "region": "KA",
+    "customerName": "Cjst",
+    "contactPerson": "tcantoc",
+    "contactMobile": "3425345",
+    "contactEmail": "tett@dell.com",
+    "description": "",
+    "date": "2026-05-29",
+    "notes": "Urgency : sjpjfpwer",
+    "createdAt": "2026-05-29T10:23:43.160Z",
+    "updatedAt": "2026-05-29T12:15:40.346Z"
+  },
+  {
+    "id": 1780056748053,
+    "enquiryNo": "32453245",
+    "salesPoc": "POCName",
+    "region": "TN",
+    "customerName": "Dell",
+    "contactPerson": "Pavan",
+    "contactMobile": "430502345324",
+    "contactEmail": "contact@dell.com",
+    "description": "Enquiry Description : Hardware 20",
+    "date": "2026-05-29",
+    "notes": "Special Instructions : Urgent need of quote tomorrow..",
+    "createdAt": "2026-05-29T12:12:28.053Z"
+  },
+  {
+    "id": 1780057426696,
+    "enquiryNo": "3245",
+    "salesPoc": "POCName",
+    "region": "KA",
+    "customerName": "wrwqer",
+    "contactPerson": "contact per",
+    "contactMobile": "4564364566",
+    "contactEmail": "mail2me.pavan@gmail.com",
+    "description": "test",
+    "date": "2026-05-29",
+    "notes": "note",
+    "createdAt": "2026-05-29T12:23:46.696Z",
+    "updatedAt": "2026-05-29T12:24:27.326Z"
+  }
+]

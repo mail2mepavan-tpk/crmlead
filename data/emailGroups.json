@@ -1,0 +1,29 @@
+[
+  {
+    "id": 1780411674164,
+    "name": "LeadsAlerts-NewOrModify",
+    "emailIds": "test@test.com;avc@test.com",
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T14:47:54.165Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T14:47:54.165Z"
+  },
+  {
+    "id": 1780411706995,
+    "name": "LeadToDeal-Approvers",
+    "emailIds": "approvers@test.com",
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T14:48:26.995Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T14:48:26.995Z"
+  },
+  {
+    "id": 1780411756542,
+    "name": "DealToQuoteApprovers",
+    "emailIds": "deals@test.com;quote@test.com",
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T14:49:16.542Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T14:49:16.542Z"
+  }
+]

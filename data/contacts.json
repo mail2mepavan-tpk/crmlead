@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1780410712975,
+    "salutation": "Mr",
+    "firstName": "Pavan",
+    "lastName": "Kumar",
+    "designation": "Sales Manager",
+    "department": "Marketing",
+    "mobile": "32532453245",
+    "email": "sales@test.com",
+    "status": "Active",
+    "description": "descriptsions",
+    "doNotCall": true,
+    "emailOptOut": false,
+    "fax": "",
+    "assistantName": "Assist",
+    "assistantPhone": "34253245345",
+    "attachments": "attactments",
+    "address": "34534",
+    "city": "Bangalore",
+    "state": "Karnataka",
+    "country": "India",
+    "pinZip": "518501",
+    "notes": "internal",
+    "tasks": "Pending",
+    "leads": [],
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T14:31:52.976Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T14:32:26.336Z"
+  }
+]

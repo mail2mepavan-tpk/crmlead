@@ -1,0 +1,29 @@
+[
+  {
+    "id": 1780411551473,
+    "name": "Website referal",
+    "description": "Online referal",
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T14:45:51.473Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T14:45:51.473Z"
+  },
+  {
+    "id": 1780411568085,
+    "name": "Offline Marketing",
+    "description": "Offline Marketing",
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T14:46:08.085Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T14:46:08.085Z"
+  },
+  {
+    "id": 1780411588379,
+    "name": "NewPaper Marketing",
+    "description": "Newspaper",
+    "createdBy": "Pavan Kumar Talikota",
+    "createdDate": "2026-06-02T14:46:28.379Z",
+    "updatedBy": "Pavan Kumar Talikota",
+    "updatedDate": "2026-06-02T14:46:28.379Z"
+  }
+]
