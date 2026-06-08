@@ -10,6 +10,16 @@
     "createdAt": "2026-05-26T12:03:19.819Z"
   },
   {
+    "id": 1779796997440,
+    "fullName": "Prasad",
+    "email": "prasad@gmail.com",
+    "username": "prasad",
+    "password": "User123",
+    "role": "Admin",
+    "phone": "+917997573805",
+    "createdAt": "2026-05-26T12:03:19.819Z"
+  },
+  {
     "id": 1779797357410,
     "fullName": "test",
     "email": "test@gmail.com",
