@@ -12,7 +12,11 @@ const fieldClass = (hasError) =>
       : 'border-slate-300 focus:border-sky-500 focus:ring-sky-500/10',
   ].join(' ');
 
+const generateRegionId = () => `REG-${Date.now()}`;
+
 const emptyForm = () => ({
+  regionId: generateRegionId(),
+  regionCode: '',
   name: '',
   description: '',
   createdBy: '',
@@ -45,6 +49,8 @@ export default function SalesRegionForm() {
         const region = await getSalesRegionById(id);
         if (!cancelled) {
           setFormData({
+            regionId: region.regionId || region.id || generateRegionId(),
+            regionCode: region.regionCode || '',
             name: region.name || '',
             description: region.description || '',
             createdBy: region.createdBy || '',
@@ -94,6 +100,8 @@ export default function SalesRegionForm() {
     }
 
     const payload = {
+      regionId: formData.regionId || generateRegionId(),
+      regionCode: formData.regionCode.trim(),
       name: formData.name.trim(),
       description: formData.description.trim(),
       createdBy: formData.createdBy || currentUser?.fullName || currentUser?.username || 'System',
@@ -174,6 +182,35 @@ export default function SalesRegionForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="regionId" className="text-sm font-semibold text-slate-800">
+                Region ID
+              </label>
+              <input
+                id="regionId"
+                name="regionId"
+                value={formData.regionId}
+                readOnly
+                className="w-full rounded border border-slate-300 bg-slate-100 px-3 py-3 text-sm text-slate-600"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label htmlFor="regionCode" className="text-sm font-semibold text-slate-800">
+                Region Code
+              </label>
+              <input
+                id="regionCode"
+                name="regionCode"
+                value={formData.regionCode}
+                onChange={handleChange}
+                className={fieldClass(false)}
+                placeholder="e.g. KA-01"
+              />
+            </div>
+          </div>
+
           <div className="flex flex-col gap-2">
             <label htmlFor="name" className="text-sm font-semibold text-slate-800">
               Region Name *
