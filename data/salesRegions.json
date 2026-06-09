@@ -1,29 +1,13 @@
 [
   {
-    "id": 1780411502497,
-    "name": "KA",
-    "description": "Karnataka",
-    "createdBy": "Pavan Kumar Talikota",
-    "createdDate": "2026-06-02T14:45:02.497Z",
-    "updatedBy": "Pavan Kumar Talikota",
-    "updatedDate": "2026-06-02T14:45:02.497Z"
-  },
-  {
-    "id": 1780411515497,
-    "name": "TN",
-    "description": "TamilNadu",
-    "createdBy": "Pavan Kumar Talikota",
-    "createdDate": "2026-06-02T14:45:15.497Z",
-    "updatedBy": "Pavan Kumar Talikota",
-    "updatedDate": "2026-06-02T14:45:15.497Z"
-  },
-  {
-    "id": 1780661822004,
-    "name": "UP",
-    "description": "UP",
-    "createdBy": "Pavan Kumar Talikota",
-    "createdDate": "2026-06-05T12:17:02.004Z",
-    "updatedBy": "Pavan Kumar Talikota",
-    "updatedDate": "2026-06-05T12:17:02.004Z"
+    "id": 1781013174862,
+    "regionId": "REG-1781013142369",
+    "regionCode": "KA-05",
+    "name": "KA-Central",
+    "description": "Bangalore central",
+    "createdBy": "Prasad",
+    "createdDate": "2026-06-09T13:52:54.863Z",
+    "updatedBy": "Prasad",
+    "updatedDate": "2026-06-09T13:53:41.532Z"
   }
 ]

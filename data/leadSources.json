@@ -5,8 +5,10 @@
     "description": "Online referal",
     "createdBy": "Pavan Kumar Talikota",
     "createdDate": "2026-06-02T14:45:51.473Z",
-    "updatedBy": "Pavan Kumar Talikota",
-    "updatedDate": "2026-06-02T14:45:51.473Z"
+    "updatedBy": "Prasad",
+    "updatedDate": "2026-06-09T13:58:53.391Z",
+    "sourceCategory": "Web",
+    "status": "Active"
   },
   {
     "id": 1780411568085,
@@ -23,7 +25,20 @@
     "description": "Newspaper",
     "createdBy": "Pavan Kumar Talikota",
     "createdDate": "2026-06-02T14:46:28.379Z",
-    "updatedBy": "Pavan Kumar Talikota",
-    "updatedDate": "2026-06-02T14:46:28.379Z"
+    "updatedBy": "Prasad",
+    "updatedDate": "2026-06-09T13:58:37.009Z",
+    "sourceCategory": "NewPaper",
+    "status": "Active"
+  },
+  {
+    "id": 1781013492850,
+    "name": "Online - Digital",
+    "description": "Online",
+    "sourceCategory": "DigiMarketing",
+    "status": "Active",
+    "createdBy": "Prasad",
+    "createdDate": "2026-06-09T13:58:12.850Z",
+    "updatedBy": "Prasad",
+    "updatedDate": "2026-06-09T13:58:12.850Z"
   }
 ]

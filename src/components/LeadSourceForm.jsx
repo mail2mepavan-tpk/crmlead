@@ -15,6 +15,8 @@ const fieldClass = (hasError) =>
 const emptyForm = () => ({
   name: '',
   description: '',
+  sourceCategory: '',
+  status: 'Active',
   createdBy: '',
   createdDate: '',
   updatedBy: '',
@@ -47,6 +49,8 @@ export default function LeadSourceForm() {
           setFormData({
             name: source.name || '',
             description: source.description || '',
+            sourceCategory: source.sourceCategory || '',
+            status: source.status || 'Active',
             createdBy: source.createdBy || '',
             createdDate: source.createdDate || '',
             updatedBy: source.updatedBy || '',
@@ -96,6 +100,8 @@ export default function LeadSourceForm() {
     const payload = {
       name: formData.name.trim(),
       description: formData.description.trim(),
+      sourceCategory: formData.sourceCategory.trim(),
+      status: formData.status || 'Active',
       createdBy: formData.createdBy || currentUser?.fullName || currentUser?.username || 'System',
       createdDate: formData.createdDate || new Date().toISOString(),
       updatedBy: currentUser?.fullName || currentUser?.username || 'System',
@@ -174,6 +180,38 @@ export default function LeadSourceForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="sourceCategory" className="text-sm font-semibold text-slate-800">
+                Source Category
+              </label>
+              <input
+                id="sourceCategory"
+                name="sourceCategory"
+                value={formData.sourceCategory}
+                onChange={handleChange}
+                className={fieldClass(false)}
+                placeholder="e.g. Digital Marketing"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label htmlFor="status" className="text-sm font-semibold text-slate-800">
+                Status
+              </label>
+              <select
+                id="status"
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className={fieldClass(false)}
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-2">
             <label htmlFor="name" className="text-sm font-semibold text-slate-800">
               Source Name *
