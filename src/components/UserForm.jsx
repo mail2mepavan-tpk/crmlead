@@ -16,6 +16,10 @@ const emptyForm = () => ({
   fullName: '',
   email: '',
   username: '',
+  employeeId: '',
+  reportingManager: '',
+  region: '',
+  status: 'Active',
   password: '',
   confirmPassword: '',
   role: 'Executive',
@@ -55,6 +59,10 @@ export default function UserForm() {
             fullName: user.fullName,
             email: user.email,
             username: user.username,
+            employeeId: user.employeeId || '',
+            reportingManager: user.reportingManager || '',
+            region: user.region || '',
+            status: user.status || 'Active',
             password: '',
             confirmPassword: '',
             role: user.role,
@@ -132,6 +140,10 @@ export default function UserForm() {
       fullName: formData.fullName,
       email: formData.email,
       username: formData.username,
+      employeeId: formData.employeeId,
+      reportingManager: formData.reportingManager,
+      region: formData.region,
+      status: formData.status,
       role: formData.role,
       phone: formData.phone,
     };
@@ -263,6 +275,68 @@ export default function UserForm() {
             {errors.username && (
               <span className="text-xs font-medium text-red-500">{errors.username}</span>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="employeeId" className="text-sm font-semibold text-slate-800">
+                Employee ID
+              </label>
+              <input
+                id="employeeId"
+                name="employeeId"
+                value={formData.employeeId}
+                onChange={handleChange}
+                className={fieldClass(false)}
+                placeholder="E1234"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label htmlFor="reportingManager" className="text-sm font-semibold text-slate-800">
+                Reporting Manager
+              </label>
+              <input
+                id="reportingManager"
+                name="reportingManager"
+                value={formData.reportingManager}
+                onChange={handleChange}
+                className={fieldClass(false)}
+                placeholder="Jane Smith"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="region" className="text-sm font-semibold text-slate-800">
+                Region
+              </label>
+              <input
+                id="region"
+                name="region"
+                value={formData.region}
+                onChange={handleChange}
+                className={fieldClass(false)}
+                placeholder="North America"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label htmlFor="status" className="text-sm font-semibold text-slate-800">
+                Status
+              </label>
+              <select
+                id="status"
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className={fieldClass(false)}
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2">

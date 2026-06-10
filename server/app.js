@@ -62,7 +62,18 @@ function sanitizeUser(user) {
 }
 
 function validateUserFields(body, { requirePassword }) {
-  const { fullName, email, username, password, role, phone } = body;
+  const {
+    fullName,
+    email,
+    username,
+    password,
+    role,
+    phone,
+    employeeId,
+    reportingManager,
+    region,
+    status,
+  } = body;
   if (!fullName?.trim() || !email?.trim() || !username?.trim()) {
     return { error: 'fullName, email, and username are required' };
   }
@@ -73,6 +84,8 @@ function validateUserFields(body, { requirePassword }) {
     return { error: 'invalid email address' };
   }
   const normalizedRole = role?.trim() || 'user';
+  const normalizedStatus =
+    status?.trim().toLowerCase() === 'inactive' ? 'Inactive' : 'Active';
   return {
     data: {
       fullName: fullName.trim(),
@@ -81,6 +94,10 @@ function validateUserFields(body, { requirePassword }) {
       password: password?.trim(),
       role: normalizedRole === 'admin' ? 'admin' : normalizedRole,
       phone: phone?.trim() || '',
+      employeeId: employeeId?.trim() || '',
+      reportingManager: reportingManager?.trim() || '',
+      region: region?.trim() || '',
+      status: normalizedStatus,
     },
   };
 }
@@ -1181,6 +1198,10 @@ app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
       fullName: data.fullName,
       email: data.email,
       username: data.username,
+      employeeId: data.employeeId,
+      reportingManager: data.reportingManager,
+      region: data.region,
+      status: data.status,
       password: data.password,
       role: data.role,
       phone: data.phone,
@@ -1223,6 +1244,10 @@ app.put('/api/users/:id', requireAuth, async (req, res) => {
       fullName: data.fullName,
       email: data.email,
       username: data.username,
+      employeeId: data.employeeId,
+      reportingManager: data.reportingManager,
+      region: data.region,
+      status: data.status,
       role: isAdmin ? data.role : users[index].role,
       phone: data.phone,
       updatedAt: new Date().toISOString(),

@@ -54,12 +54,18 @@ export default function UsersDashboard() {
     }
   };
 
-  const filtered = users.filter(
-    (u) =>
-      u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.username.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = users.filter((u) => {
+    const term = searchTerm.toLowerCase();
+    return (
+      u.fullName.toLowerCase().includes(term) ||
+      u.email.toLowerCase().includes(term) ||
+      u.username.toLowerCase().includes(term) ||
+      (u.employeeId || '').toLowerCase().includes(term) ||
+      (u.reportingManager || '').toLowerCase().includes(term) ||
+      (u.region || '').toLowerCase().includes(term) ||
+      (u.status || '').toLowerCase().includes(term)
+    );
+  });
 
   if (loading) {
     return (
@@ -163,8 +169,17 @@ export default function UsersDashboard() {
                     <th className="hidden px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase md:table-cell">
                       Email
                     </th>
+                    <th className="hidden px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase lg:table-cell">
+                      Employee ID
+                    </th>
+                    <th className="hidden px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase lg:table-cell">
+                      Region
+                    </th>
                     <th className="px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase">
                       Username
+                    </th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase">
+                      Status
                     </th>
                     <th className="px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase">
                       Role
@@ -189,8 +204,26 @@ export default function UsersDashboard() {
                       <td className="hidden px-4 py-4 text-sm text-slate-600 md:table-cell">
                         {user.email}
                       </td>
+                      <td className="hidden px-4 py-4 text-sm text-slate-600 lg:table-cell">
+                        {user.employeeId || '—'}
+                      </td>
+                      <td className="hidden px-4 py-4 text-sm text-slate-600 lg:table-cell">
+                        {user.region || '—'}
+                      </td>
                       <td className="px-4 py-4 text-sm text-slate-600">
                         {user.username}
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={[
+                            'inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize',
+                            user.status?.toLowerCase() === 'inactive'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-emerald-100 text-emerald-800',
+                          ].join(' ')}
+                        >
+                          {user.status || 'Active'}
+                        </span>
                       </td>
                       <td className="px-4 py-4">
                         <span
