@@ -1,45 +1,30 @@
 [
   {
-    "id": 1779796997440,
-    "fullName": "Prasad",
-    "email": "prasad@gmail.com",
-    "username": "prasad",
-    "password": "User123",
-    "role": "Admin",
-    "phone": "+917997573805",
-    "createdAt": "2026-05-26T12:03:19.819Z"
-  },
-  {
-    "id": 1779797357410,
-    "fullName": "test",
-    "email": "test@gmail.com",
-    "username": "test",
-    "password": "User123",
-    "role": "Executive",
-    "phone": "+917997573805",
-    "createdAt": "2026-05-26T12:09:17.410Z",
-    "updatedAt": "2026-06-05T11:04:18.508Z"
-  },
-  {
-    "id": 1780657651034,
-    "fullName": "testdata",
-    "email": "ge@gmail.com",
-    "username": "de",
-    "password": "123456",
-    "role": "Manager",
-    "phone": "+917997573805",
-    "createdAt": "2026-06-05T11:07:31.034Z",
-    "updatedAt": "2026-06-05T11:14:45.310Z"
-  },
-  {
-    "id": 1780657947189,
+    "id": 1781102073199,
     "fullName": "Tharun",
-    "email": "me.pavan@gmail.com",
-    "username": "me.pavan@gmail.com",
-    "password": "T4Ak$Gi_GAyJhp",
-    "role": "Manager",
-    "phone": "+917997573805",
-    "createdAt": "2026-06-05T11:12:27.189Z",
-    "updatedAt": "2026-06-05T11:22:08.744Z"
+    "email": "test@tt.com",
+    "username": "p",
+    "employeeId": "E12345",
+    "reportingManager": "JJ",
+    "region": "KA-Central",
+    "status": "Active",
+    "password": "123456",
+    "role": "Admin",
+    "phone": "",
+    "createdAt": "2026-06-10T14:34:33.199Z"
+  },
+  {
+    "id": 1781102157165,
+    "fullName": "tt",
+    "email": "tt@tt.com",
+    "username": "tt",
+    "employeeId": "R324",
+    "reportingManager": "TT",
+    "region": "KA-Central",
+    "status": "Active",
+    "password": "123456",
+    "role": "Executive",
+    "phone": "",
+    "createdAt": "2026-06-10T14:35:57.165Z"
   }
 ]
