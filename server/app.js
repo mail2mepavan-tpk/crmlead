@@ -53,7 +53,7 @@ const EMAIL_GROUPS_FILE = path.join(__dirname, '..', 'data', 'emailGroups.json')
 const readEmailGroups = () => readJsonFile(EMAIL_GROUPS_FILE, writeEmailGroups);
 const writeEmailGroups = (data) => writeJsonFile(EMAIL_GROUPS_FILE, data);
 
-const AZURE_EMAIL_CONNECTION_STRING = '"endpoint=https://satviancommunications.unitedstates.communication.azure.com/;accesskey=YOUR_ACCESS_KEY_HERE';
+const AZURE_EMAIL_CONNECTION_STRING = '"endpoint=https://satviancommunications.unitedstates.communication.azure.com/;accesskey=' + process.env.AZURE_EMAIL_CONNECTION_STRING + '"';
 const AZURE_EMAIL_FROM_ADDRESS =
   process.env.AZURE_EMAIL_FROM_ADDRESS || 'no-reply@satvian.com';
 const AZURE_EMAIL_RECIPIENTS =
