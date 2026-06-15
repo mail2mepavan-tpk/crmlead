@@ -3,6 +3,7 @@ import cors from 'cors';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { EmailClient } from '@azure/communication-email';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ENQUIRIES_FILE = path.join(__dirname, '..', 'data', 'enquiries.json');
@@ -52,6 +53,25 @@ const EMAIL_GROUPS_FILE = path.join(__dirname, '..', 'data', 'emailGroups.json')
 const readEmailGroups = () => readJsonFile(EMAIL_GROUPS_FILE, writeEmailGroups);
 const writeEmailGroups = (data) => writeJsonFile(EMAIL_GROUPS_FILE, data);
 
+const AZURE_EMAIL_CONNECTION_STRING = '"endpoint=https://satviancommunications.unitedstates.communication.azure.com/;accesskey=YOUR_ACCESS_KEY_HERE';
+const AZURE_EMAIL_FROM_ADDRESS =
+  process.env.AZURE_EMAIL_FROM_ADDRESS || 'no-reply@satvian.com';
+const AZURE_EMAIL_RECIPIENTS =
+  process.env.AZURE_EMAIL_RECIPIENTS?.split(',').map((address) => address.trim()).filter(Boolean) || [];
+
+let emailClient = null;
+if (AZURE_EMAIL_CONNECTION_STRING) {
+  try {
+    emailClient = new EmailClient(AZURE_EMAIL_CONNECTION_STRING);
+  } catch (err) {
+    // Don't throw during import (vite dev server). Log and disable email feature.
+    console.warn('Azure EmailClient initialization failed, email disabled:', err && err.message ? err.message : err);
+    emailClient = null;
+  }
+}
+//az communication email domain show --name satviandomainemail.axurecomm.net --email-service-name satvianemailservcie --resource-group SatvianCRM --subscription 35e977f7-0b10-40c1-835a-f920c1f05f87
+ // az communication email show --name satviancrmemail --resource-group SatvianCRM --subscription 35e977f7-0b10-40c1-835a-f920c1f05f87
+
 function matchId(record, id) {
   return String(record.id) === String(id);
 }
@@ -59,6 +79,138 @@ function matchId(record, id) {
 function sanitizeUser(user) {
   const { password: _password, ...safe } = user;
   return safe;
+}
+
+function getLeadEmailRecipients(lead) {
+  const recipients = [];
+  if (!emailClient) {
+    return recipients;
+  }
+
+  const configuredRecipients = AZURE_EMAIL_RECIPIENTS.map((email) => ({
+    email,
+    displayName: email,
+  }));
+
+  recipients.push(...configuredRecipients);
+
+  if (lead.leadContactId) {
+    const contacts = readContacts();
+    return contacts.then((allContacts) => {
+      const contact = allContacts.find((c) => matchId(c, lead.leadContactId));
+      if (contact?.email) {
+        recipients.push({
+          email: contact.email,
+          displayName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || contact.email,
+        });
+      }
+      return recipients;
+    });
+  }
+
+  return Promise.resolve(recipients);
+}
+
+async function sendLeadCreatedEmail(lead) {
+  if (!emailClient) {
+    return;
+  }
+
+  const recipients = await getLeadEmailRecipients(lead);
+  if (!recipients.length) {
+    return;
+  }
+
+  const subject = `New sales lead created: ${lead.title}`;
+  const plainText = `A new sales lead was created.
+
+Title: ${lead.title}
+Company: ${lead.companyName}
+Region: ${lead.leadRegion}
+Source: ${lead.leadSource}
+Sales POC: ${lead.salesPoc}
+Contact: ${lead.leadContact}
+
+Description:
+${lead.description}
+
+View the lead in the CRM after saving.`;
+  const htmlText = `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111">
+    <h2>New sales lead created</h2>
+    <p><strong>Title:</strong> ${lead.title}</p>
+    <p><strong>Company:</strong> ${lead.companyName}</p>
+    <p><strong>Region:</strong> ${lead.leadRegion}</p>
+    <p><strong>Source:</strong> ${lead.leadSource}</p>
+    <p><strong>Sales POC:</strong> ${lead.salesPoc}</p>
+    <p><strong>Contact:</strong> ${lead.leadContact}</p>
+    <p><strong>Description:</strong> ${lead.description}</p>
+    <p><strong>Next contact date:</strong> ${lead.nextContactDate || 'Not set'}</p>
+    <p style="margin-top:1em;color:#555;font-size:0.95rem;">This notification was generated automatically by CRM app.</p>
+  </div>`;
+
+  try {
+    const sender = AZURE_EMAIL_FROM_ADDRESS;
+    if (sender === 'no-reply@company.com') {
+      console.warn(
+        'Azure email sender address is not configured. Set AZURE_EMAIL_FROM_ADDRESS to a verified sender address.'
+      );
+    }
+
+    // const sendRequest = {
+    //   sender,
+    //   senderAddress: 'DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net',
+    //   content: {
+    //     subject,
+    //     plainText,
+    //     html,
+    //   },
+    //   recipients: [{address :'geteme1.pavan@gmail.com'}] ,
+    // };
+
+    // build `to` recipients: include configured recipients + the LeadsAlerts-NewOrModify group
+    const emailGroups = await readEmailGroups();
+    const leadAlertGroup = emailGroups.find((g) => g.name === 'LeadsAlerts-NewOrModify');
+    const groupEmails = leadAlertGroup && leadAlertGroup.emailIds
+      ? leadAlertGroup.emailIds.split(/[;,]+/).map((e) => e.trim()).filter(Boolean)
+      : [];
+
+    const toRecipients = [
+      ...groupEmails.map((email) => ({ address: email })),
+    ];
+
+    const emailMessage = {
+      senderAddress: "DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net",
+      content: {
+        subject: subject,
+        plainText: plainText,
+        html: htmlText,
+      },
+      recipients: {
+        to: toRecipients,
+      },
+    };
+
+    if (typeof emailClient.send === 'function') {
+      await emailClient.send(emailMessage);
+    } else if (typeof emailClient.sendEmail === 'function') {
+      await emailClient.sendEmail(emailMessage);
+    } else if (typeof emailClient.beginSend === 'function') {
+      const poller = await emailClient.beginSend(emailMessage);
+      if (poller && typeof poller.pollUntilDone === 'function') {
+        await poller.pollUntilDone();
+      }
+    } else {
+      console.warn('No supported send method found on emailClient; email not sent');
+    }
+  } catch (error) {
+    console.error('Failed to send lead creation email:', {
+      message: error?.message,
+      code: error?.code,
+      statusCode: error?.statusCode,
+      details: error?.details,
+      stack: error?.stack,
+    });
+  }
 }
 
 function validateUserFields(body, { requirePassword }) {
@@ -857,6 +1009,11 @@ app.post('/api/sales-leads', requireAuth, async (req, res) => {
     };
     leads.push(newLead);
     await writeSalesLeads(leads);
+
+    sendLeadCreatedEmail(newLead).catch((error) => {
+      console.error('Error sending new lead notification email:', error);
+    });
+
     res.status(201).json(newLead);
   } catch (error) {
     res.status(500).json({ error: error.message });

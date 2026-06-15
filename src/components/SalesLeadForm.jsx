@@ -508,19 +508,6 @@ export default function SalesLeadForm() {
                       className={fieldClass(false)}
                     />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <label htmlFor="salutation" className="text-sm font-semibold text-slate-800">
-                      Salutation
-                    </label>
-                    <input
-                      id="salutation"
-                      name="salutation"
-                      value={formData.salutation}
-                      onChange={handleChange}
-                      className={fieldClass(false)}
-                      placeholder="Mr, Ms, Dr..."
-                    />
-                  </div>
                 </div>
               </div>
             </div>
