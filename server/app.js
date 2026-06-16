@@ -6,6 +6,16 @@ import { fileURLToPath } from 'url';
 import { EmailClient } from '@azure/communication-email';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Read appsettings.json
+const appSettingsPath = path.join(__dirname, '..', 'appsettings.json');
+let appSettings = {};
+try {
+  const appSettingsData = await fs.readFile(appSettingsPath, 'utf-8');
+  appSettings = JSON.parse(appSettingsData);
+} catch (error) {
+  console.warn('Failed to read appsettings.json:', error.message);
+}
 export const ENQUIRIES_FILE = path.join(__dirname, '..', 'data', 'enquiries.json');
 export const USERS_FILE = path.join(__dirname, '..', 'data', 'users.json');
 export const PORT = Number(process.env.PORT) || 3001;
@@ -53,11 +63,14 @@ const EMAIL_GROUPS_FILE = path.join(__dirname, '..', 'data', 'emailGroups.json')
 const readEmailGroups = () => readJsonFile(EMAIL_GROUPS_FILE, writeEmailGroups);
 const writeEmailGroups = (data) => writeJsonFile(EMAIL_GROUPS_FILE, data);
 
-const AZURE_EMAIL_CONNECTION_STRING = 'endpoint=https://satviancommunications.unitedstates.communication.azure.com/;accesskey=2VowKkpr2VfQzHS5t5lWiFI3Kx311oAUOdOMMCifTTWQzkrUgrloJQQJ99CFACULyCp4GowwAAAAAZCSZjeY';
+const AZURE_EMAIL_CONNECTION_STRING = appSettings.azure?.email?.connectionString || '';
 const AZURE_EMAIL_FROM_ADDRESS =
-  process.env.AZURE_EMAIL_FROM_ADDRESS || 'no-reply@satvian.com';
+  process.env.AZURE_EMAIL_FROM_ADDRESS || appSettings.azure?.email?.fromAddress || 'no-reply@satvian.com';
 const AZURE_EMAIL_RECIPIENTS =
-  process.env.AZURE_EMAIL_RECIPIENTS?.split(',').map((address) => address.trim()).filter(Boolean) || [];
+  (process.env.AZURE_EMAIL_RECIPIENTS?.split(',').map((address) => address.trim()).filter(Boolean)) || 
+  (appSettings.azure?.email?.recipients && Array.isArray(appSettings.azure.email.recipients) 
+    ? appSettings.azure.email.recipients 
+    : []);
 
 let emailClient = null;
 if (AZURE_EMAIL_CONNECTION_STRING) {
@@ -121,32 +134,151 @@ async function sendLeadCreatedEmail(lead) {
     return;
   }
 
-  const subject = `New sales lead created: ${lead.title}`;
-  const plainText = `A new sales lead was created.
+  const subject = `New Sales Lead: ${lead.title} - ${lead.companyName}`;
+  const plainText = `NEW SALES LEAD ALERT
+========================
 
-Title: ${lead.title}
-Company: ${lead.companyName}
-Region: ${lead.leadRegion}
-Source: ${lead.leadSource}
-Sales POC: ${lead.salesPoc}
-Contact: ${lead.leadContact}
+Opportunity Title:
+${lead.title}
 
-Description:
+Company:
+${lead.companyName}
+
+Sales Point of Contact:
+${lead.salesPoc}
+
+Contact Name:
+${lead.leadContact}
+
+Lead Region:
+${lead.leadRegion}
+
+Lead Source:
+${lead.leadSource}
+
+Opportunity Description:
 ${lead.description}
 
-View the lead in the CRM after saving.`;
-  const htmlText = `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111">
-    <h2>New sales lead created</h2>
-    <p><strong>Title:</strong> ${lead.title}</p>
-    <p><strong>Company:</strong> ${lead.companyName}</p>
-    <p><strong>Region:</strong> ${lead.leadRegion}</p>
-    <p><strong>Source:</strong> ${lead.leadSource}</p>
-    <p><strong>Sales POC:</strong> ${lead.salesPoc}</p>
-    <p><strong>Contact:</strong> ${lead.leadContact}</p>
-    <p><strong>Description:</strong> ${lead.description}</p>
-    <p><strong>Next contact date:</strong> ${lead.nextContactDate || 'Not set'}</p>
-    <p style="margin-top:1em;color:#555;font-size:0.95rem;">This notification was generated automatically by CRM app.</p>
-  </div>`;
+Lead Status:
+${lead.leadStatus || 'New'}
+
+Lead Rating:
+${lead.leadRating || 'Warm'}
+
+Next Contact Date:
+${lead.nextContactDate || 'Not scheduled'}
+
+Priority: ${lead.targetDealAmount ? 'HIGH - Deal amount: ' + lead.targetDealAmount : 'STANDARD'}
+
+========================
+This is an automated notification from the CRM system.
+Log in to your CRM dashboard to view full details and take action.`;
+
+  const htmlText = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5;">
+    <div style="background-color: #ffffff; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; overflow: hidden;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 30px 20px; text-align: center;">
+            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">🎯 New Sales Lead Alert</h1>
+            <p style="margin: 8px 0 0 0; color: #ecf0f1; font-size: 14px;">Action Required</p>
+        </div>
+
+        <!-- Content -->
+        <div style="padding: 30px 20px;">
+            <!-- Lead Title Section -->
+            <div style="background-color: #ecf0f1; border-left: 4px solid #2c3e50; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <p style="margin: 0; color: #7f8c8d; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Opportunity Title</p>
+                <h2 style="margin: 8px 0 0 0; color: #2c3e50; font-size: 20px;">${lead.title}</h2>
+            </div>
+
+            <!-- Key Information Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+                <!-- Company -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Company</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${lead.companyName}</p>
+                </div>
+
+                <!-- Region -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Region</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${lead.leadRegion}</p>
+                </div>
+
+                <!-- Lead Source -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Lead Source</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${lead.leadSource}</p>
+                </div>
+
+                <!-- Sales POC -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Sales POC</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${lead.salesPoc}</p>
+                </div>
+
+                <!-- Contact Name -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Contact Name</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${lead.leadContact}</p>
+                </div>
+
+                <!-- Lead Status -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Status</p>
+                    <p style="margin: 8px 0 0 0; color: #27ae60; font-size: 15px; font-weight: 600;">${lead.leadStatus || 'New'}</p>
+                </div>
+            </div>
+
+            <!-- Description Section -->
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px;">Description</p>
+                <p style="margin: 0; color: #2c3e50; font-size: 14px; line-height: 1.6;">${lead.description}</p>
+            </div>
+
+            <!-- Additional Details -->
+            <div style="background-color: #ecf7ed; border-left: 4px solid #27ae60; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <p style="margin: 0; color: #27ae60; font-size: 12px; font-weight: 600; margin-bottom: 10px;">⏰ NEXT ACTIONS</p>
+                <table style="width: 100%; font-size: 14px;">
+                    <tr>
+                        <td style="color: #7f8c8d; padding: 5px 0;">Next Contact Date:</td>
+                        <td style="color: #2c3e50; font-weight: 600; padding: 5px 0;">${lead.nextContactDate || 'Not scheduled'}</td>
+                    </tr>
+                    <tr>
+                        <td style="color: #7f8c8d; padding: 5px 0;">Lead Rating:</td>
+                        <td style="color: #2c3e50; font-weight: 600; padding: 5px 0;">${lead.leadRating || 'Warm'}</td>
+                    </tr>
+                    ${lead.targetDealAmount ? `<tr>
+                        <td style="color: #7f8c8d; padding: 5px 0;">Target Deal Amount:</td>
+                        <td style="color: #e74c3c; font-weight: 600; padding: 5px 0;">${lead.targetDealAmount}</td>
+                    </tr>` : ''}
+                </table>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin-bottom: 25px;">
+                <a href="https://satviancrmtest-h2ckhfe4a8fcf9du.centralus-01.azurewebsites.net/login" style="display: inline-block; background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: #ffffff; padding: 14px 40px; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 15px; transition: opacity 0.3s;">View Lead in CRM →</a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #ecf0f1; padding: 20px; border-top: 1px solid #bdc3c7; text-align: center;">
+            <p style="margin: 0; color: #7f8c8d; font-size: 12px; line-height: 1.6;">
+                This is an automated notification from the Satvian CRM system.<br>
+                Please do not reply to this email. Log in to your CRM dashboard for more details.
+            </p>
+            <p style="margin: 12px 0 0 0; color: #95a5a6; font-size: 11px;">
+                © 2026 Satvian Communications. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>`;
 
   try {
     const sender = AZURE_EMAIL_FROM_ADDRESS;
