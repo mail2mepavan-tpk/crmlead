@@ -10,6 +10,7 @@ import {
   MapPin,
   Tag,
   Mail,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -86,6 +87,12 @@ export default function Sidebar({ isOpen, onClose }) {
               onClose={onClose}
               icon={LayoutDashboard}
               label="Leads Dashboard"
+            />
+            <NavItem
+              to="/deals"
+              onClose={onClose}
+              icon={Briefcase}
+              label="Deals"
             />
             <NavItem
               to="/accounts"

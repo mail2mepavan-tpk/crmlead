@@ -16,6 +16,8 @@ import EmailGroupsDashboard from './components/EmailGroupsDashboard';
 import EmailGroupForm from './components/EmailGroupForm';
 import SalesLeadsDashboard from './components/SalesLeadsDashboard';
 import SalesLeadForm from './components/SalesLeadForm';
+import DealsDashboard from './components/DealsDashboard';
+import DealForm from './components/DealForm';
 import LoginPage from './components/LoginPage';
 import {
   PublicRoute,
@@ -45,6 +47,9 @@ export default function EnquiryManagementSystem() {
             <Route path="/sales-leads" element={<SalesLeadsDashboard />} />
             <Route path="/sales-leads/new" element={<SalesLeadForm />} />
             <Route path="/sales-leads/:id/edit" element={<SalesLeadForm />} />
+            <Route path="/deals" element={<DealsDashboard />} />
+            <Route path="/deals/new" element={<DealForm />} />
+            <Route path="/deals/:id/edit" element={<DealForm />} />
             <Route path="/profile" element={<UserForm />} />
 
             <Route element={<AdminRoute />}>

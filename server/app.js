@@ -53,6 +53,9 @@ const writeContacts = (data) => writeJsonFile(CONTACTS_FILE, data);
 const SALES_LEADS_FILE = path.join(__dirname, '..', 'data', 'salesLeads.json');
 const readSalesLeads = () => readJsonFile(SALES_LEADS_FILE, writeSalesLeads);
 const writeSalesLeads = (data) => writeJsonFile(SALES_LEADS_FILE, data);
+const DEALS_FILE = path.join(__dirname, '..', 'data', 'deals.json');
+const readDeals = () => readJsonFile(DEALS_FILE, writeDeals);
+const writeDeals = (data) => writeJsonFile(DEALS_FILE, data);
 const SALES_REGIONS_FILE = path.join(__dirname, '..', 'data', 'salesRegions.json');
 const readSalesRegions = () => readJsonFile(SALES_REGIONS_FILE, writeSalesRegions);
 const writeSalesRegions = (data) => writeJsonFile(SALES_REGIONS_FILE, data);
@@ -561,6 +564,83 @@ function parseSalesLeadBody(body) {
     createdDate: body.createdDate || '',
     updatedBy: body.updatedBy?.trim() || '',
     updatedDate: body.updatedDate || '',
+  };
+}
+
+function parseDealBody(body) {
+  return {
+    dealName: body.dealName?.trim() || '',
+    account: body.account?.trim() || '',
+    accountId: body.accountId || '',
+    primaryContact: body.primaryContact?.trim() || '',
+    leadId: body.leadId || '',
+    salesPoc: body.salesPoc?.trim() || '',
+    dealStage: body.dealStage || 'New',
+    dealAmount: body.dealAmount?.trim() || '',
+    probability: Number(body.probability) || 0,
+    expectedClosureDate: body.expectedClosureDate || '',
+    competitor: body.competitor?.trim() || '',
+    dealSource: body.dealSource?.trim() || '',
+    description: body.description?.trim() || '',
+    lostReason: body.lostReason?.trim() || '',
+    wonDate: body.wonDate || '',
+    region: body.region?.trim() || '',
+    attachments: body.attachments?.trim() || '',
+    extraFields: body.extraFields || {},
+    createdBy: body.createdBy?.trim() || '',
+    createdDate: body.createdDate || '',
+    updatedBy: body.updatedBy?.trim() || '',
+    updatedDate: body.updatedDate || '',
+    notes: body.notes?.trim() || '',
+    tasks: body.tasks?.trim() || '',
+    activities: body.activities?.trim() || '',
+  };
+}
+
+function validateDeal(body) {
+  if (!body.dealName) {
+    return { error: 'Deal name is required' };
+  }
+  if (!body.account) {
+    return { error: 'Account is required' };
+  }
+  if (!body.salesPoc) {
+    return { error: 'Sales POC is required' };
+  }
+  if (!body.dealStage) {
+    return { error: 'Deal stage is required' };
+  }
+  return { data: body };
+}
+
+function buildDealRecord(data, existing = {}) {
+  return {
+    ...existing,
+    dealName: data.dealName,
+    account: data.account,
+    accountId: data.accountId,
+    primaryContact: data.primaryContact,
+    leadId: data.leadId,
+    salesPoc: data.salesPoc,
+    dealStage: data.dealStage,
+    dealAmount: data.dealAmount,
+    probability: data.probability,
+    expectedClosureDate: data.expectedClosureDate,
+    competitor: data.competitor,
+    dealSource: data.dealSource,
+    description: data.description,
+    lostReason: data.lostReason,
+    wonDate: data.wonDate,
+    region: data.region,
+    attachments: data.attachments,
+    extraFields: data.extraFields,
+    createdBy: data.createdBy,
+    createdDate: data.createdDate,
+    updatedBy: data.updatedBy,
+    updatedDate: data.updatedDate,
+    notes: data.notes,
+    tasks: data.tasks,
+    activities: data.activities,
   };
 }
 
@@ -1186,6 +1266,89 @@ app.delete('/api/sales-leads/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Sales lead not found' });
     }
     await writeSalesLeads(next);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/deals', requireAuth, async (_req, res) => {
+  try {
+    res.json(await readDeals());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/deals/:id', requireAuth, async (req, res) => {
+  try {
+    const deals = await readDeals();
+    const deal = deals.find((d) => matchId(d, req.params.id));
+    if (!deal) {
+      return res.status(404).json({ error: 'Deal not found' });
+    }
+    res.json(deal);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/deals', requireAuth, async (req, res) => {
+  try {
+    const validation = validateDeal(parseDealBody(req.body));
+    if (validation.error) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const deals = await readDeals();
+    const newDeal = {
+      id: Date.now(),
+      ...buildDealRecord(validation.data),
+      createdDate: new Date().toISOString(),
+      updatedDate: new Date().toISOString(),
+    };
+    deals.push(newDeal);
+    await writeDeals(deals);
+    res.status(201).json(newDeal);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/deals/:id', requireAuth, async (req, res) => {
+  try {
+    const deals = await readDeals();
+    const index = deals.findIndex((d) => matchId(d, req.params.id));
+    if (index === -1) {
+      return res.status(404).json({ error: 'Deal not found' });
+    }
+
+    const validation = validateDeal(parseDealBody(req.body));
+    if (validation.error) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const updated = {
+      ...deals[index],
+      ...buildDealRecord(validation.data, deals[index]),
+      updatedDate: new Date().toISOString(),
+    };
+    deals[index] = updated;
+    await writeDeals(deals);
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/deals/:id', requireAuth, async (req, res) => {
+  try {
+    const deals = await readDeals();
+    const next = deals.filter((d) => !matchId(d, req.params.id));
+    if (next.length === deals.length) {
+      return res.status(404).json({ error: 'Deal not found' });
+    }
+    await writeDeals(next);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
