@@ -63,7 +63,7 @@ export const replaceEnquiries = async (enquiries) => {
 };
 
 export const exportEnquiries = async () => {
-  const enquiries = await getEnquiries();
+  const enquiries = await getSalesLeads();
   const dataStr = JSON.stringify(enquiries, null, 2);
   const dataBlob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(dataBlob);

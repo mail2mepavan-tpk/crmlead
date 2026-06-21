@@ -256,7 +256,7 @@ export default function SalesLeadForm() {
       notes: formData.notes.trim(),
       description: formData.description.trim(),
       productType: formData.productType.trim(),
-      targetDealAmount: formData.targetDealAmount.trim(),
+      targetDealAmount: formData.targetDealAmount,
       attachments: formData.attachments.trim(),
       companyName: formData.companyName.trim(),
       companyId: formData.companyId,

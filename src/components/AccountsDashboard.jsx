@@ -72,9 +72,9 @@ export default function AccountsDashboard() {
       account.city,
       account.state,
       account.country,
-    ]
-      .filter(Boolean)
-      .some((field) => field.toLowerCase().includes(term));
+    ];
+     // .filter(Boolean)
+     // .some((field) => field.toLowerCase().includes(term));
   });
 
   if (loading) {
@@ -265,29 +265,7 @@ export default function AccountsDashboard() {
                             <Trash2 className="size-4" />
                           </button>
                         </div>
-                        <div className="mt-3 grid grid-cols-1 gap-2">
-                          <button
-                            type="button"
-                            className={modalButtonClass}
-                            onClick={() => setPopup({ type: 'leads', account })}
-                          >
-                            Leads
-                          </button>
-                          <button
-                            type="button"
-                            className={modalButtonClass}
-                            onClick={() => setPopup({ type: 'contacts', account })}
-                          >
-                            Contacts
-                          </button>
-                          <button
-                            type="button"
-                            className={modalButtonClass}
-                            onClick={() => setPopup({ type: 'deals', account })}
-                          >
-                            Deals
-                          </button>
-                        </div>
+
                       </td>
                     </tr>
                   ))}

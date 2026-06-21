@@ -40,7 +40,7 @@ export default function UserForm() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(isEditing && Boolean(editId));
   const [saving, setSaving] = useState(false);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!isEditing) {

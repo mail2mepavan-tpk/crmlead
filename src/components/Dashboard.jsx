@@ -25,6 +25,7 @@ import {
   enquiryMatchesSearch,
   formatEnquiryDetails,
 } from '../utils/enquiryFields';
+import { deleteSalesLead, getSalesLeads } from '../utils/salesLeadStorage';
 
 const inputClass =
   'w-full rounded border border-slate-300 px-3 py-2.5 text-sm transition-colors focus:border-sky-500 focus:outline-none focus:ring-3 focus:ring-sky-500/10';
@@ -51,7 +52,7 @@ export default function Dashboard() {
     try {
       setLoading(true);
       setError('');
-      const data = await getEnquiries();
+      const data = await getSalesLeads();
       setEnquiries(data);
       setSummary(getEnquiriesSummary(data));
     } catch (err) {
@@ -97,7 +98,7 @@ export default function Dashboard() {
     }
 
     try {
-      await deleteEnquiry(id);
+      await deleteSalesLead(id);
       await loadEnquiries();
     } catch (err) {
       alert('Error deleting enquiry: ' + err.message);
@@ -242,11 +243,11 @@ export default function Dashboard() {
 
         <div className="flex flex-wrap gap-2.5">
           <Link
-            to="/intake"
+            to="/sales-leads/new"
             className="inline-flex items-center gap-1.5 rounded bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white no-underline transition-all hover:-translate-y-0.5 hover:bg-sky-600 hover:shadow-md"
           >
             <Plus className="size-4" />
-            New Enquiry
+            New Sales Lead
           </Link>
           <button
             type="button"
@@ -274,98 +275,50 @@ export default function Dashboard() {
               </p>
               {enquiries.length === 0 && (
                 <Link
-                  to="/intake"
+                  to="/sales-leads/new"
                   className="inline-block rounded bg-sky-500 px-5 py-2.5 font-semibold text-white no-underline transition-all hover:-translate-y-0.5 hover:bg-sky-600"
                 >
-                  Create New Enquiry
+                  Create Sales Lead
                 </Link>
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
+              <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b-2 border-slate-100 bg-surface">
-                    <th className="hidden px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase sm:table-cell">
-                      Enquiry No
-                    </th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase">
-                      Customer
-                    </th>
-                    <th className="hidden px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase lg:table-cell">
-                      Region
-                    </th>
-                    <th className="hidden px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase md:table-cell">
-                      Sales POC
-                    </th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase">
-                      Contact
-                    </th>
-                    <th className="hidden px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase xl:table-cell">
-                      Email
-                    </th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold tracking-wide text-slate-800 uppercase">
-                      Date
-                    </th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold tracking-wide text-slate-800 uppercase">
-                      Actions
-                    </th>
+                  <tr className="border-b-2 border-slate-100 bg-surface text-left uppercase text-[11px] tracking-[0.18em] text-slate-500">
+                    <th className="px-4 py-4">Title</th>
+                    <th className="px-4 py-4">Company</th>
+                    <th className="px-4 py-4">Contact</th>
+                    <th className="px-4 py-4">Status</th>
+                    <th className="px-4 py-4">Region</th>
+                    <th className="px-4 py-4">Received</th>
+                    <th className="px-4 py-4 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEnquiries.map((enquiry) => (
-                    <tr
-                      key={enquiry.id}
-                      className="border-b border-slate-100 transition-colors hover:bg-slate-50"
-                    >
-                      <td className="hidden px-4 py-4 text-xs font-mono text-slate-500 sm:table-cell">
-                        {enquiry.enquiryNo || '—'}
-                      </td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-800">
-                        {getCustomerName(enquiry)}
-                      </td>
-                      <td className="hidden px-4 py-4 text-sm text-slate-600 lg:table-cell">
-                        {enquiry.region || '—'}
-                      </td>
-                      <td className="hidden px-4 py-4 text-sm text-slate-600 md:table-cell">
-                        {enquiry.salesPoc || '—'}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">
-                        <div>{enquiry.contactPerson || '—'}</div>
-                        {enquiry.contactMobile && (
-                          <div className="text-xs text-slate-500">
-                            {enquiry.contactMobile}
-                          </div>
-                        )}
-                      </td>
-                      <td className="hidden max-w-[180px] truncate px-4 py-4 text-sm text-slate-500 xl:table-cell">
-                        {enquiry.contactEmail || '—'}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">
-                        {formatDate(enquiry.date)}
-                      </td>
+                  {filteredEnquiries.map((lead) => (
+                    <tr key={lead.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50">
+                      <td className="px-4 py-4 font-semibold text-slate-900">{lead.title}</td>
+                      <td className="px-4 py-4 text-slate-700">{lead.companyName || '—'}</td>
+                      <td className="px-4 py-4 text-slate-700">{lead.leadContact || '—'}</td>
+                      <td className="px-4 py-4 text-slate-700">{lead.leadStatus || 'New'}</td>
+                      <td className="px-4 py-4 text-slate-700">{lead.leadRegion || '—'}</td>
+                      <td className="px-4 py-4 text-slate-700">{lead.receivedDate || '—'}</td>
                       <td className="px-4 py-4">
                         <div className="flex justify-center gap-2">
-                          <button
-                            type="button"
-                            className="rounded p-1.5 text-slate-600 transition-all hover:scale-110 hover:bg-slate-100"
-                            title="View Details"
-                            onClick={() => alert(formatEnquiryDetails(enquiry))}
-                          >
-                            <Eye className="size-4" />
-                          </button>
                           <Link
-                            to={`/intake/${enquiry.id}`}
-                            className="rounded p-1.5 text-slate-600 transition-all hover:scale-110 hover:bg-sky-50 hover:text-sky-600"
-                            title="Edit"
+                            to={`/sales-leads/${lead.id}/edit`}
+                            className="rounded border border-slate-200 bg-white p-2 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                            title="Edit lead"
                           >
                             <Pencil className="size-4" />
                           </Link>
                           <button
                             type="button"
-                            className="rounded p-1.5 text-slate-600 transition-all hover:scale-110 hover:bg-red-50 hover:text-red-500"
-                            title="Delete"
-                            onClick={() => handleDelete(enquiry.id)}
+                            onClick={() => handleDelete(lead.id, lead.title)}
+                            className="rounded border border-red-200 bg-red-50 p-2 text-red-600 transition-all hover:bg-red-100"
+                            title="Delete lead"
                           >
                             <Trash2 className="size-4" />
                           </button>

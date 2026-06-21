@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { EmailClient } from '@azure/communication-email';
+import sql from 'mssql';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,55 +17,288 @@ try {
 } catch (error) {
   console.warn('Failed to read appsettings.json:', error.message);
 }
-export const ENQUIRIES_FILE = path.join(__dirname, '..', 'data', 'enquiries.json');
-export const USERS_FILE = path.join(__dirname, '..', 'data', 'users.json');
+
 export const PORT = Number(process.env.PORT) || 3001;
+const DB_CONNECTION_STRING =
+  process.env.DB_CONNECTION_STRING ||
+  appSettings.azure?.database?.connectionString ||
+  '';
+
 const CLIENT_BUILD_PATH = path.join(__dirname, '..', 'dist');
 
-async function readJsonFile(filePath, writeEmpty) {
-  try {
-    const raw = await fs.readFile(filePath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      await writeEmpty([]);
-      return [];
+const TABLES = {
+  enquiries: 'Enquiries',
+  users: 'Users',
+  accounts: 'Accounts',
+  contacts: 'Contacts',
+  salesLeads: 'SalesLeads',
+  deals: 'Deals',
+  salesRegions: 'SalesRegions',
+  leadSources: 'LeadSources',
+  emailGroups: 'EmailGroups',
+};
+
+let dbPool = null;
+async function getDbPool() {
+  if (!dbPool) {
+    if (!DB_CONNECTION_STRING) {
+      throw new Error('Database connection string is not configured');
     }
+    dbPool = await sql.connect(DB_CONNECTION_STRING);
+  }
+  return dbPool;
+}
+
+function serializeValue(value) {
+  if (value === undefined) {
+    return null;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
+    return JSON.stringify(value);
+  }
+  return value;
+}
+
+function isDateField(fieldName) {
+  return /date|time/i.test(fieldName);
+}
+
+function normalizeColumnValue(fieldName, value) {
+  if (value === undefined || value === '') {
+    return null;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (isDateField(fieldName)) {
+    if (value instanceof Date) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim();
+      if (!normalized) {
+        return null;
+      }
+      const parsed = new Date(normalized);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+      return null;
+    }
+  }
+  return value;
+}
+
+function safeParseJson(value) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return value;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeRow(row) {
+  const normalized = { ...row };
+  for (const key of Object.keys(normalized)) {
+    normalized[key] = safeParseJson(normalized[key]);
+  }
+  return normalized;
+}
+
+async function queryDb(query, params = {}) {
+  const pool = await getDbPool();
+  const request = pool.request();
+  for (const [name, value] of Object.entries(params)) {
+    request.input(name, serializeValue(value));
+  }
+  const result = await request.query(query);
+  return result.recordset || [];
+}
+
+async function readTable(tableName) {
+  const rows = await queryDb(`SELECT * FROM ${tableName}`);
+  return rows.map(normalizeRow);
+}
+
+async function  writeTable(tableName, rows) {
+  if (!Array.isArray(rows)) {
+    throw new Error('Data must be an array');
+  }
+  const pool = await getDbPool();
+  const transaction = new sql.Transaction(pool);
+
+  try {
+    await transaction.begin();
+
+    for (const row of rows) {
+      const columns = Object.keys(row);
+      if (columns.length === 0) {
+        continue;
+      }
+      const columnList = columns.map((name) => `[${name}]`).join(', ');
+      const valueList = columns.map((name) => `@${name}`).join(', ');
+      const query = `INSERT INTO ${tableName} (${columnList}) VALUES (${valueList})`;
+      const insertRequest = transaction.request();
+      for (const [name, value] of Object.entries(row)) {
+        const normalized = normalizeColumnValue(name, value);
+        insertRequest.input(name, serializeValue(normalized));
+      }
+      await insertRequest.query(query);
+    }
+
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
     throw error;
   }
 }
 
-async function writeJsonFile(filePath, data) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+async function writeUpdate(tableName, row) {
+  if (!row || typeof row !== 'object') {
+    throw new Error('Row must be an object');
+  }
+
+  const pool = await getDbPool();
+  const transaction = new sql.Transaction(pool);
+
+  try {
+    await transaction.begin();
+
+    // determine key column: prefer id/Id, else first property ending with Id
+    let keyName = null;
+    if (Object.prototype.hasOwnProperty.call(row, 'id')) keyName = 'id';
+    else if (Object.prototype.hasOwnProperty.call(row, 'Id')) keyName = 'Id';
+    else {
+      for (const k of Object.keys(row)) {
+        if (/Id$/i.test(k) && row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') {
+          keyName = k;
+          break;
+        }
+      }
+    }
+
+    if (!keyName) {
+      keyName = 'id';
+      row.id = Date.now();
+    }
+
+    const keyValue = normalizeColumnValue(keyName, row[keyName]);
+
+    // check existence
+    const checkReq = transaction.request();
+    checkReq.input('key', serializeValue(keyValue));
+    const existsRes = await checkReq.query(`SELECT COUNT(1) AS cnt FROM ${tableName} WHERE [${keyName}] = @key`);
+    const exists = (existsRes.recordset && existsRes.recordset[0] && existsRes.recordset[0].cnt) > 0;
+
+    if (exists) {
+      // build update for all columns except key
+      const columns = Object.keys(row).filter((c) => String(c) !== String(keyName));
+      if (columns.length > 0) {
+        const setClauses = columns.map((c) => `[${c}] = @${c}`).join(', ');
+        const updateReq = transaction.request();
+        updateReq.input('key', serializeValue(keyValue));
+        for (const col of columns) {
+          const normalized = normalizeColumnValue(col, row[col]);
+          updateReq.input(col, serializeValue(normalized));
+        }
+        await updateReq.query(`UPDATE ${tableName} SET ${setClauses} WHERE [${keyName}] = @key`);
+      }
+    } else {
+      // insert single row
+      const columns = Object.keys(row);
+      const columnList = columns.map((name) => `[${name}]`).join(', ');
+      const valueList = columns.map((name) => `@${name}`).join(', ');
+      const insertReq = transaction.request();
+      for (const [name, value] of Object.entries(row)) {
+        const normalized = normalizeColumnValue(name, value);
+        insertReq.input(name, serializeValue(normalized));
+      }
+      await insertReq.query(`INSERT INTO ${tableName} (${columnList}) VALUES (${valueList})`);
+    }
+
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+
+  if (tableName.toLowerCase() === 'deals') {
+    sendDealCreatedEmail(row, false); // Additional logic for sales leads if needed
+  }
+
+  if (tableName.toLowerCase() === 'salesleads') {
+    sendLeadCreatedEmail(row, false); 
+  }
 }
 
-const readEnquiries = () => readJsonFile(ENQUIRIES_FILE, writeEnquiries);
-const writeEnquiries = (data) => writeJsonFile(ENQUIRIES_FILE, data);
-const readUsers = () => readJsonFile(USERS_FILE, writeUsers);
-const writeUsers = (data) => writeJsonFile(USERS_FILE, data);
-const ACCOUNTS_FILE = path.join(__dirname, '..', 'data', 'accounts.json');
-const readAccounts = () => readJsonFile(ACCOUNTS_FILE, writeAccounts);
-const writeAccounts = (data) => writeJsonFile(ACCOUNTS_FILE, data);
-const CONTACTS_FILE = path.join(__dirname, '..', 'data', 'contacts.json');
-const readContacts = () => readJsonFile(CONTACTS_FILE, writeContacts);
-const writeContacts = (data) => writeJsonFile(CONTACTS_FILE, data);
-const SALES_LEADS_FILE = path.join(__dirname, '..', 'data', 'salesLeads.json');
-const readSalesLeads = () => readJsonFile(SALES_LEADS_FILE, writeSalesLeads);
-const writeSalesLeads = (data) => writeJsonFile(SALES_LEADS_FILE, data);
-const DEALS_FILE = path.join(__dirname, '..', 'data', 'deals.json');
-const readDeals = () => readJsonFile(DEALS_FILE, writeDeals);
-const writeDeals = (data) => writeJsonFile(DEALS_FILE, data);
-const SALES_REGIONS_FILE = path.join(__dirname, '..', 'data', 'salesRegions.json');
-const readSalesRegions = () => readJsonFile(SALES_REGIONS_FILE, writeSalesRegions);
-const writeSalesRegions = (data) => writeJsonFile(SALES_REGIONS_FILE, data);
-const LEAD_SOURCES_FILE = path.join(__dirname, '..', 'data', 'leadSources.json');
-const readLeadSources = () => readJsonFile(LEAD_SOURCES_FILE, writeLeadSources);
-const writeLeadSources = (data) => writeJsonFile(LEAD_SOURCES_FILE, data);
-const EMAIL_GROUPS_FILE = path.join(__dirname, '..', 'data', 'emailGroups.json');
-const readEmailGroups = () => readJsonFile(EMAIL_GROUPS_FILE, writeEmailGroups);
-const writeEmailGroups = (data) => writeJsonFile(EMAIL_GROUPS_FILE, data);
+async function deleteTable(tableName, keyName, keyValue) {
+  const pool = await getDbPool();
+  const transaction = new sql.Transaction(pool);
+
+  try {
+    await transaction.begin();
+    const request = transaction.request();
+    request.input('key', serializeValue(normalizeColumnValue(keyName, keyValue)));
+    await request.query(`DELETE FROM ${tableName} WHERE [${keyName}] = @key`);
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+
+const readEnquiries = () => readTable(TABLES.enquiries);
+const writeEnquiries = (data) => writeTable(TABLES.enquiries, data);
+const updateEnquiries = (row) => writeUpdate(TABLES.enquiries, row);
+const deleteEnquiries = (id) => deleteTable(TABLES.enquiries, 'id', id);
+
+const readUsers = () => readTable(TABLES.users);
+const writeUsers = (data) => writeTable(TABLES.users, data);
+const updateUsers = (row) => writeUpdate(TABLES.users, row);
+const deleteUsers = (id) => deleteTable(TABLES.users, 'id', id);
+const readAccounts = () => readTable(TABLES.accounts);
+const writeAccounts = (data) => writeTable(TABLES.accounts, data);
+const updateAccounts = (row) => writeUpdate(TABLES.accounts, row);
+const deleteAccounts = (id) => deleteTable(TABLES.accounts, 'id', id);
+const readContacts = () => readTable(TABLES.contacts);
+const writeContacts = (data) => writeTable(TABLES.contacts, data);
+const updateContacts = (row) => writeUpdate(TABLES.contacts, row);
+const deleteContacts = (id) => deleteTable(TABLES.contacts, 'id', id);
+const readSalesLeads = () => readTable(TABLES.salesLeads);
+const writeSalesLeads = (data) => writeTable(TABLES.salesLeads, data);
+const updateSalesLeads = (row) => writeUpdate(TABLES.salesLeads, row);
+const deleteSalesLeads = (id) => deleteTable(TABLES.salesLeads, 'id', id);
+const readDeals = () => readTable(TABLES.deals);
+const writeDeals = (data) => writeTable(TABLES.deals, data);
+const updateDeals = (row) => writeUpdate(TABLES.deals, row);
+const deleteDeals = (id) => deleteTable(TABLES.deals, 'id', id);
+const readLeadSources = () => readTable(TABLES.leadSources);
+const writeLeadSources = (data) => writeTable(TABLES.leadSources, data);
+const updateLeadSources = (row) => writeUpdate(TABLES.leadSources, row);
+const deleteLeadSources = (id) => deleteTable(TABLES.leadSources, 'id', id);
+const readEmailGroups = () => readTable(TABLES.emailGroups);
+const writeEmailGroups = (data) => writeTable(TABLES.emailGroups, data);
+const updateEmailGroups = (row) => writeUpdate(TABLES.emailGroups, row);
+const deleteEmailGroups = (id) => deleteTable(TABLES.emailGroups, 'id', id);
+const readSalesRegions = () => readTable(TABLES.salesRegions);
+const writeSalesRegions = (data) => writeTable(TABLES.salesRegions, data);
+const updateSalesRegions = (row) => writeUpdate(TABLES.salesRegions, row);
+const deleteSalesRegions = (id) => deleteTable(TABLES.salesRegions, 'id', id);
+const updateTable = writeUpdate;
 
 const AZURE_EMAIL_CONNECTION_STRING = appSettings.azure?.email?.connectionString || '';
 const AZURE_EMAIL_FROM_ADDRESS =
@@ -127,7 +361,7 @@ function getLeadEmailRecipients(lead) {
   return Promise.resolve(recipients);
 }
 
-async function sendLeadCreatedEmail(lead) {
+async function sendLeadCreatedEmail(lead, isNew = true) {
   if (!emailClient) {
     return;
   }
@@ -137,7 +371,11 @@ async function sendLeadCreatedEmail(lead) {
     return;
   }
 
-  const subject = `New Sales Lead: ${lead.title} - ${lead.companyName}`;
+  var subject = `New Sales Lead: ${lead.title} - ${lead.companyName}`;
+  if (!isNew) {
+    subject = `Sales Lead Updated: ${lead.title} - ${lead.companyName}`;
+  }
+
   const plainText = `NEW SALES LEAD ALERT
 ========================
 
@@ -348,6 +586,196 @@ Log in to your CRM dashboard to view full details and take action.`;
   }
 }
 
+async function sendDealCreatedEmail(deal, isNew = true) {
+  if (!emailClient) {
+    return;
+  }
+
+  try {
+    const emailGroups = await readEmailGroups();
+    const dealGroup = emailGroups.find((g) => g.name === 'Deals');
+    const groupEmails = dealGroup && dealGroup.emailIds
+      ? dealGroup.emailIds.split(/[;,]+/).map((e) => e.trim()).filter(Boolean)
+      : [];
+
+    if (!groupEmails.length) {
+      console.warn('No recipients configured for Deals email group');
+      return;
+    }
+
+    var subject = `New Deal Created: ${deal.dealName} - ${deal.account}`;
+    if (!isNew) {
+      subject = `Deal Updated: ${deal.dealName} - ${deal.account}`;
+    }
+    const plainText = `NEW DEAL ALERT
+========================
+
+Deal Name:
+${deal.dealName}
+
+Account:
+${deal.account}
+
+Sales POC:
+${deal.salesPoc}
+
+Deal Stage:
+${deal.dealStage || 'New'}
+
+Deal Amount:
+${deal.dealAmount || 'Not specified'}
+
+Probability:
+${deal.probability}%
+
+Expected Closure Date:
+${deal.expectedClosureDate || 'Not scheduled'}
+
+Region:
+${deal.region || 'Not specified'}
+
+Description:
+${deal.description}
+
+========================
+This is an automated notification from the CRM system.
+Log in to your CRM dashboard to view full details and take action.`;
+
+    const htmlText = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5;">
+    <div style="background-color: #ffffff; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; overflow: hidden;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 30px 20px; text-align: center;">
+            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">💼 New Deal Created</h1>
+            <p style="margin: 8px 0 0 0; color: #ecf0f1; font-size: 14px;">Action Required</p>
+        </div>
+
+        <!-- Content -->
+        <div style="padding: 30px 20px;">
+            <!-- Deal Title Section -->
+            <div style="background-color: #ecf0f1; border-left: 4px solid #2c3e50; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <p style="margin: 0; color: #7f8c8d; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Deal Name</p>
+                <h2 style="margin: 8px 0 0 0; color: #2c3e50; font-size: 20px;">${deal.dealName}</h2>
+            </div>
+
+            <!-- Key Information Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+                <!-- Account -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Account</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${deal.account}</p>
+                </div>
+
+                <!-- Deal Stage -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Stage</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${deal.dealStage || 'New'}</p>
+                </div>
+
+                <!-- Deal Amount -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Deal Amount</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${deal.dealAmount || 'Not specified'}</p>
+                </div>
+
+                <!-- Probability -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Probability</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${deal.probability}%</p>
+                </div>
+
+                <!-- Sales POC -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Sales POC</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${deal.salesPoc}</p>
+                </div>
+
+                <!-- Region -->
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">
+                    <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Region</p>
+                    <p style="margin: 8px 0 0 0; color: #2c3e50; font-size: 15px; font-weight: 500;">${deal.region || 'Not specified'}</p>
+                </div>
+            </div>
+
+            <!-- Description Section -->
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px;">Description</p>
+                <p style="margin: 0; color: #2c3e50; font-size: 14px; line-height: 1.6;">${deal.description}</p>
+            </div>
+
+            <!-- Additional Details -->
+            <div style="background-color: #ecf7ed; border-left: 4px solid #27ae60; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <p style="margin: 0; color: #27ae60; font-size: 12px; font-weight: 600; margin-bottom: 10px;">📅 KEY DATES</p>
+                <table style="width: 100%; font-size: 14px;">
+                    <tr>
+                        <td style="color: #7f8c8d; padding: 5px 0;">Expected Closure Date:</td>
+                        <td style="color: #2c3e50; font-weight: 600; padding: 5px 0;">${deal.expectedClosureDate || 'Not scheduled'}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin-bottom: 25px;">
+                <a href="https://satviancrmtest-h2ckhfe4a8fcf9du.centralus-01.azurewebsites.net/login" style="display: inline-block; background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: #ffffff; padding: 14px 40px; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 15px; transition: opacity 0.3s;">View Deal in CRM →</a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #ecf0f1; padding: 20px; border-top: 1px solid #bdc3c7; text-align: center;">
+            <p style="margin: 0; color: #7f8c8d; font-size: 12px; line-height: 1.6;">
+                This is an automated notification from the Satvian CRM system.<br>
+                Please do not reply to this email. Log in to your CRM dashboard for more details.
+            </p>
+            <p style="margin: 12px 0 0 0; color: #95a5a6; font-size: 11px;">
+                © 2026 Satvian Communications. All rights reserved.
+            </p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+    const toRecipients = groupEmails.map((email) => ({ address: email }));
+
+    const emailMessage = {
+      senderAddress: "DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net",
+      content: {
+        subject: subject,
+        plainText: plainText,
+        html: htmlText,
+      },
+      recipients: {
+        to: toRecipients,
+      },
+    };
+
+    if (typeof emailClient.send === 'function') {
+      await emailClient.send(emailMessage);
+    } else if (typeof emailClient.sendEmail === 'function') {
+      await emailClient.sendEmail(emailMessage);
+    } else if (typeof emailClient.beginSend === 'function') {
+      const poller = await emailClient.beginSend(emailMessage);
+      if (poller && typeof poller.pollUntilDone === 'function') {
+        await poller.pollUntilDone();
+      }
+    } else {
+      console.warn('No supported send method found on emailClient; email not sent');
+    }
+  } catch (error) {
+    console.error('Failed to send deal creation email:', {
+      message: error?.message,
+      code: error?.code,
+      statusCode: error?.statusCode,
+      details: error?.details,
+      stack: error?.stack,
+    });
+  }
+}
+
 function validateUserFields(body, { requirePassword }) {
   const {
     fullName,
@@ -379,7 +807,7 @@ function validateUserFields(body, { requirePassword }) {
       email: email.trim().toLowerCase(),
       username: username.trim(),
       password: password?.trim(),
-      role: normalizedRole === 'admin' ? 'admin' : normalizedRole,
+      role: normalizedRole.toLowerCase() === 'admin' ? 'admin' : normalizedRole,
       phone: phone?.trim() || '',
       employeeId: employeeId?.trim() || '',
       reportingManager: reportingManager?.trim() || '',
@@ -576,7 +1004,7 @@ function parseDealBody(body) {
     leadId: body.leadId || '',
     salesPoc: body.salesPoc?.trim() || '',
     dealStage: body.dealStage || 'New',
-    dealAmount: body.dealAmount?.trim() || '',
+    dealAmount: body.dealAmount || 0,
     probability: Number(body.probability) || 0,
     expectedClosureDate: body.expectedClosureDate || '',
     competitor: body.competitor?.trim() || '',
@@ -699,6 +1127,8 @@ function buildSalesLeadRecord(data, existing = {}) {
 
 function parseSalesRegionBody(body) {
   return {
+    regionId: body.regionId?.trim() || '',
+    regionCode: body.regionCode?.trim() || '',
     name: body.name?.trim() || '',
     description: body.description?.trim() || '',
     createdBy: body.createdBy?.trim() || '',
@@ -719,6 +1149,7 @@ function parseLeadSourceBody(body) {
   return {
     name: body.name?.trim() || '',
     description: body.description?.trim() || '',
+    status: body.status?.trim() || 'Active',
     createdBy: body.createdBy?.trim() || '',
     createdDate: body.createdDate || '',
     updatedBy: body.updatedBy?.trim() || '',
@@ -779,7 +1210,6 @@ function buildContactRecord(data, existing = {}) {
     pinZip: data.pinZip,
     notes: data.notes,
     tasks: data.tasks,
-    leads: data.leads,
     createdBy: data.createdBy,
     createdDate: data.createdDate,
     updatedBy: data.updatedBy,
@@ -810,9 +1240,6 @@ function buildAccountRecord(data, existing = {}) {
     description: data.description,
     notes: data.notes,
     tasks: data.tasks,
-    leads: data.leads,
-    contacts: data.contacts,
-    deals: data.deals,
     createdBy: data.createdBy,
     createdDate: data.createdDate,
     updatedBy: data.updatedBy,
@@ -835,6 +1262,8 @@ function buildEmailGroupRecord(data, existing = {}) {
 function buildSalesRegionRecord(data, existing = {}) {
   return {
     ...existing,
+    regionId: data.regionId || existing.regionId || `REG-${Date.now()}`,
+    regionCode: data.regionCode || existing.regionCode || '',
     name: data.name,
     description: data.description,
     createdBy: data.createdBy,
@@ -849,6 +1278,7 @@ function buildLeadSourceRecord(data, existing = {}) {
     ...existing,
     name: data.name,
     description: data.description,
+    status: data.status || existing.status || 'Active',
     createdBy: data.createdBy,
     createdDate: data.createdDate,
     updatedBy: data.updatedBy,
@@ -951,14 +1381,12 @@ app.post('/api/enquiries', requireAuth, async (req, res) => {
       return res.status(400).json({ error: validation.error });
     }
 
-    const enquiries = await readEnquiries();
     const newEnquiry = {
       id: Date.now(),
       ...buildEnquiryRecord(validation.data),
       createdAt: new Date().toISOString(),
     };
-    enquiries.push(newEnquiry);
-    await writeEnquiries(enquiries);
+    await updateEnquiries(newEnquiry);
     res.status(201).json(newEnquiry);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -984,8 +1412,7 @@ app.put('/api/enquiries/:id', requireAuth, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
     delete updated.name;
-    enquiries[index] = updated;
-    await writeEnquiries(enquiries);
+    await updateEnquiries(updated);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -995,11 +1422,11 @@ app.put('/api/enquiries/:id', requireAuth, async (req, res) => {
 app.delete('/api/enquiries/:id', requireAuth, async (req, res) => {
   try {
     const enquiries = await readEnquiries();
-    const next = enquiries.filter((e) => !matchId(e, req.params.id));
-    if (next.length === enquiries.length) {
+    const enquiry = enquiries.find((e) => matchId(e, req.params.id));
+    if (!enquiry) {
       return res.status(404).json({ error: 'Enquiry not found' });
     }
-    await writeEnquiries(next);
+    await deleteEnquiries(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1046,15 +1473,13 @@ app.post('/api/accounts', requireAuth, async (req, res) => {
       return res.status(400).json({ error: validation.error });
     }
 
-    const accounts = await readAccounts();
     const newAccount = {
       id: Date.now(),
       ...buildAccountRecord(validation.data),
       createdDate: new Date().toISOString(),
       updatedDate: new Date().toISOString(),
     };
-    accounts.push(newAccount);
-    await writeAccounts(accounts);
+    await updateAccounts(newAccount);
     res.status(201).json(newAccount);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1079,8 +1504,7 @@ app.put('/api/accounts/:id', requireAuth, async (req, res) => {
       ...buildAccountRecord(validation.data, accounts[index]),
       updatedDate: new Date().toISOString(),
     };
-    accounts[index] = updated;
-    await writeAccounts(accounts);
+    await updateAccounts(updated);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1090,11 +1514,11 @@ app.put('/api/accounts/:id', requireAuth, async (req, res) => {
 app.delete('/api/accounts/:id', requireAuth, async (req, res) => {
   try {
     const accounts = await readAccounts();
-    const next = accounts.filter((a) => !matchId(a, req.params.id));
-    if (next.length === accounts.length) {
+    const account = accounts.find((a) => matchId(a, req.params.id));
+    if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
-    await writeAccounts(next);
+    await deleteAccounts(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1129,15 +1553,13 @@ app.post('/api/contacts', requireAuth, async (req, res) => {
       return res.status(400).json({ error: validation.error });
     }
 
-    const contacts = await readContacts();
     const newContact = {
       id: Date.now(),
       ...buildContactRecord(validation.data),
       createdDate: new Date().toISOString(),
       updatedDate: new Date().toISOString(),
     };
-    contacts.push(newContact);
-    await writeContacts(contacts);
+    await updateContacts(newContact);
     res.status(201).json(newContact);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1162,8 +1584,7 @@ app.put('/api/contacts/:id', requireAuth, async (req, res) => {
       ...buildContactRecord(validation.data, contacts[index]),
       updatedDate: new Date().toISOString(),
     };
-    contacts[index] = updated;
-    await writeContacts(contacts);
+    await updateContacts(updated);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1173,11 +1594,11 @@ app.put('/api/contacts/:id', requireAuth, async (req, res) => {
 app.delete('/api/contacts/:id', requireAuth, async (req, res) => {
   try {
     const contacts = await readContacts();
-    const next = contacts.filter((c) => !matchId(c, req.params.id));
-    if (next.length === contacts.length) {
+    const contact = contacts.find((c) => matchId(c, req.params.id));
+    if (!contact) {
       return res.status(404).json({ error: 'Contact not found' });
     }
-    await writeContacts(next);
+    await deleteContacts(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1212,15 +1633,13 @@ app.post('/api/sales-leads', requireAuth, async (req, res) => {
       return res.status(400).json({ error: validation.error });
     }
 
-    const leads = await readSalesLeads();
     const newLead = {
       id: Date.now(),
       ...buildSalesLeadRecord(validation.data),
       createdDate: new Date().toISOString(),
       updatedDate: new Date().toISOString(),
     };
-    leads.push(newLead);
-    await writeSalesLeads(leads);
+    await updateSalesLeads(newLead);
 
     sendLeadCreatedEmail(newLead).catch((error) => {
       console.error('Error sending new lead notification email:', error);
@@ -1250,8 +1669,7 @@ app.put('/api/sales-leads/:id', requireAuth, async (req, res) => {
       ...buildSalesLeadRecord(validation.data, leads[index]),
       updatedDate: new Date().toISOString(),
     };
-    leads[index] = updated;
-    await writeSalesLeads(leads);
+    await updateSalesLeads(updated);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1261,11 +1679,11 @@ app.put('/api/sales-leads/:id', requireAuth, async (req, res) => {
 app.delete('/api/sales-leads/:id', requireAuth, async (req, res) => {
   try {
     const leads = await readSalesLeads();
-    const next = leads.filter((l) => !matchId(l, req.params.id));
-    if (next.length === leads.length) {
+    const lead = leads.find((l) => matchId(l, req.params.id));
+    if (!lead) {
       return res.status(404).json({ error: 'Sales lead not found' });
     }
-    await writeSalesLeads(next);
+    await deleteSalesLeads(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1300,15 +1718,18 @@ app.post('/api/deals', requireAuth, async (req, res) => {
       return res.status(400).json({ error: validation.error });
     }
 
-    const deals = await readDeals();
     const newDeal = {
       id: Date.now(),
       ...buildDealRecord(validation.data),
       createdDate: new Date().toISOString(),
       updatedDate: new Date().toISOString(),
     };
-    deals.push(newDeal);
-    await writeDeals(deals);
+    await updateDeals(newDeal);
+
+    sendDealCreatedEmail(newDeal).catch((error) => {
+      console.error('Error sending deal creation email:', error);
+    });
+
     res.status(201).json(newDeal);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1333,8 +1754,7 @@ app.put('/api/deals/:id', requireAuth, async (req, res) => {
       ...buildDealRecord(validation.data, deals[index]),
       updatedDate: new Date().toISOString(),
     };
-    deals[index] = updated;
-    await writeDeals(deals);
+    await updateDeals(updated);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1344,11 +1764,11 @@ app.put('/api/deals/:id', requireAuth, async (req, res) => {
 app.delete('/api/deals/:id', requireAuth, async (req, res) => {
   try {
     const deals = await readDeals();
-    const next = deals.filter((d) => !matchId(d, req.params.id));
-    if (next.length === deals.length) {
+    const deal = deals.find((d) => matchId(d, req.params.id));
+    if (!deal) {
       return res.status(404).json({ error: 'Deal not found' });
     }
-    await writeDeals(next);
+    await deleteDeals(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1392,15 +1812,13 @@ app.post('/api/sales-regions', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: validation.error });
     }
 
-    const regions = await readSalesRegions();
     const newRegion = {
       id: Date.now(),
       ...buildSalesRegionRecord(validation.data),
       createdDate: new Date().toISOString(),
       updatedDate: new Date().toISOString(),
     };
-    regions.push(newRegion);
-    await writeSalesRegions(regions);
+    await updateSalesRegions(newRegion);
     res.status(201).json(newRegion);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1425,8 +1843,8 @@ app.put('/api/sales-regions/:id', requireAuth, requireAdmin, async (req, res) =>
       ...buildSalesRegionRecord(validation.data, regions[index]),
       updatedDate: new Date().toISOString(),
     };
-    regions[index] = updated;
-    await writeSalesRegions(regions);
+
+    await updateSalesRegions(updated);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1436,11 +1854,11 @@ app.put('/api/sales-regions/:id', requireAuth, requireAdmin, async (req, res) =>
 app.delete('/api/sales-regions/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const regions = await readSalesRegions();
-    const next = regions.filter((r) => !matchId(r, req.params.id));
-    if (next.length === regions.length) {
+    const region = regions.find((r) => matchId(r, req.params.id));
+    if (!region) {
       return res.status(404).json({ error: 'Sales region not found' });
     }
-    await writeSalesRegions(next);
+    await deleteSalesRegions(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1475,15 +1893,13 @@ app.post('/api/lead-sources', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: validation.error });
     }
 
-    const sources = await readLeadSources();
     const newSource = {
       id: Date.now(),
       ...buildLeadSourceRecord(validation.data),
       createdDate: new Date().toISOString(),
       updatedDate: new Date().toISOString(),
     };
-    sources.push(newSource);
-    await writeLeadSources(sources);
+    await updateLeadSources(newSource);
     res.status(201).json(newSource);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1508,8 +1924,7 @@ app.put('/api/lead-sources/:id', requireAuth, requireAdmin, async (req, res) => 
       ...buildLeadSourceRecord(validation.data, sources[index]),
       updatedDate: new Date().toISOString(),
     };
-    sources[index] = updated;
-    await writeLeadSources(sources);
+    await updateLeadSources(updated);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1519,11 +1934,11 @@ app.put('/api/lead-sources/:id', requireAuth, requireAdmin, async (req, res) => 
 app.delete('/api/lead-sources/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const sources = await readLeadSources();
-    const next = sources.filter((s) => !matchId(s, req.params.id));
-    if (next.length === sources.length) {
+    const source = sources.find((s) => matchId(s, req.params.id));
+    if (!source) {
       return res.status(404).json({ error: 'Lead source not found' });
     }
-    await writeLeadSources(next);
+    await deleteLeadSources(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1558,15 +1973,13 @@ app.post('/api/email-groups', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: validation.error });
     }
 
-    const groups = await readEmailGroups();
     const newGroup = {
       id: Date.now(),
       ...buildEmailGroupRecord(validation.data),
       createdDate: new Date().toISOString(),
       updatedDate: new Date().toISOString(),
     };
-    groups.push(newGroup);
-    await writeEmailGroups(groups);
+    await updateEmailGroups(newGroup);
     res.status(201).json(newGroup);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1591,8 +2004,7 @@ app.put('/api/email-groups/:id', requireAuth, requireAdmin, async (req, res) => 
       ...buildEmailGroupRecord(validation.data, groups[index]),
       updatedDate: new Date().toISOString(),
     };
-    groups[index] = updated;
-    await writeEmailGroups(groups);
+    await updateEmailGroups(updated);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1602,11 +2014,11 @@ app.put('/api/email-groups/:id', requireAuth, requireAdmin, async (req, res) => 
 app.delete('/api/email-groups/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const groups = await readEmailGroups();
-    const next = groups.filter((g) => !matchId(g, req.params.id));
-    if (next.length === groups.length) {
+    const group = groups.find((g) => matchId(g, req.params.id));
+    if (!group) {
       return res.status(404).json({ error: 'Email group not found' });
     }
-    await writeEmailGroups(next);
+    await deleteEmailGroups(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1615,7 +2027,7 @@ app.delete('/api/email-groups/:id', requireAuth, requireAdmin, async (req, res) 
 
 app.get('/api/users/:id', requireAuth, async (req, res) => {
   try {
-    const isAdmin = req.authUser.role === 'admin';
+    const isAdmin = req.authUser.role?.toLowerCase() === 'admin';
     const isSelf = matchId({ id: req.authUser.id }, req.params.id);
     if (!isAdmin && !isSelf) {
       return res.status(403).json({ error: 'Forbidden' });
@@ -1659,8 +2071,7 @@ app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
       phone: data.phone,
       createdAt: new Date().toISOString(),
     };
-    users.push(newUser);
-    await writeUsers(users);
+    await updateUsers(newUser);
     res.status(201).json(sanitizeUser(newUser));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1669,7 +2080,7 @@ app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
 
 app.put('/api/users/:id', requireAuth, async (req, res) => {
   try {
-    const isAdmin = req.authUser.role === 'admin';
+    const isAdmin = req.authUser.role?.toLowerCase() === 'admin';
     const isSelf = matchId({ id: req.authUser.id }, req.params.id);
     if (!isAdmin && !isSelf) {
       return res.status(403).json({ error: 'Forbidden' });
@@ -1700,16 +2111,17 @@ app.put('/api/users/:id', requireAuth, async (req, res) => {
       reportingManager: data.reportingManager,
       region: data.region,
       status: data.status,
+      password: data.password || users[index].password,
       role: isAdmin ? data.role : users[index].role,
       phone: data.phone,
-      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      //updatedDate: new Date().toISOString(),
     };
     if (data.password) {
       updated.password = data.password;
     }
 
-    users[index] = updated;
-    await writeUsers(users);
+    await updateUsers(updated);
     res.json(sanitizeUser(updated));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1719,11 +2131,11 @@ app.put('/api/users/:id', requireAuth, async (req, res) => {
 app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const users = await readUsers();
-    const next = users.filter((u) => !matchId(u, req.params.id));
-    if (next.length === users.length) {
+    const user = users.find((u) => matchId(u, req.params.id));
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    await writeUsers(next);
+    await deleteUsers(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

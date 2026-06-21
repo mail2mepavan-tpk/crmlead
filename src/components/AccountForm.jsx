@@ -36,10 +36,7 @@ const emptyForm = () => ({
   gstNumber: '',
   description: '',
   notes: '',
-  tasks: '',
-  leads: [],
-  contacts: [],
-  deals: [],
+  tasks: ''
 });
 
 export default function AccountForm() {
@@ -86,9 +83,6 @@ export default function AccountForm() {
             description: account.description || '',
             notes: account.notes || '',
             tasks: account.tasks || '',
-            leads: account.leads || [],
-            contacts: account.contacts || [],
-            deals: account.deals || [],
             createdBy: account.createdBy || '',
             createdDate: account.createdDate || '',
             updatedBy: account.updatedBy || '',
@@ -162,9 +156,6 @@ export default function AccountForm() {
       description: formData.description.trim(),
       notes: formData.notes.trim(),
       tasks: formData.tasks.trim(),
-      leads: formData.leads,
-      contacts: formData.contacts,
-      deals: formData.deals,
       createdBy: formData.createdBy || currentUser?.fullName || currentUser?.username || 'System',
       createdDate: formData.createdDate || new Date().toISOString(),
       updatedBy: currentUser?.fullName || currentUser?.username || 'System',
