@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { EmailClient } from '@azure/communication-email';
 import sql from 'mssql';
+import PDFDocument from 'pdfkit';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -300,9 +301,28 @@ const updateSalesRegions = (row) => writeUpdate(TABLES.salesRegions, row);
 const deleteSalesRegions = (id) => deleteTable(TABLES.salesRegions, 'id', id);
 const updateTable = writeUpdate;
 
+// Quotation file-based storage
+const QUOTES_FILE = path.join(__dirname, '..', 'data', 'quotes.json');
+
+async function readQuotes() {
+  try {
+    const data = await fs.readFile(QUOTES_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    return [];
+  }
+}
+
+async function writeQuotes(quotes) {
+  await fs.writeFile(QUOTES_FILE, JSON.stringify(quotes, null, 2));
+}
+
+function generateQuoteId() {
+  return 'Q' + Date.now() + Math.random().toString(36).substr(2, 9);
+}
+
 const AZURE_EMAIL_CONNECTION_STRING = appSettings.azure?.email?.connectionString || '';
-const AZURE_EMAIL_FROM_ADDRESS =
-  process.env.AZURE_EMAIL_FROM_ADDRESS || appSettings.azure?.email?.fromAddress || 'no-reply@satvian.com';
+const AZURE_EMAIL_FROM_ADDRESS = appSettings.azure?.email?.fromAddress || 'no-reply@satvian.com';
 const AZURE_EMAIL_RECIPIENTS =
   (process.env.AZURE_EMAIL_RECIPIENTS?.split(',').map((address) => address.trim()).filter(Boolean)) || 
   (appSettings.azure?.email?.recipients && Array.isArray(appSettings.azure.email.recipients) 
@@ -742,7 +762,7 @@ Log in to your CRM dashboard to view full details and take action.`;
     const toRecipients = groupEmails.map((email) => ({ address: email }));
 
     const emailMessage = {
-      senderAddress: "DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net",
+      senderAddress: AZURE_EMAIL_FROM_ADDRESS,
       content: {
         subject: subject,
         plainText: plainText,
@@ -982,7 +1002,7 @@ function parseSalesLeadBody(body) {
     notes: body.notes?.trim() || '',
     description: body.description?.trim() || '',
     productType: body.productType?.trim() || '',
-    targetDealAmount: body.targetDealAmount?.trim() || '',
+    targetDealAmount: body.targetDealAmount || '',
     attachments: body.attachments?.trim() || '',
     companyName: body.companyName?.trim() || '',
     companyId: body.companyId || '',
@@ -2141,6 +2161,533 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Quotation API Routes
+app.get('/api/quotes', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const quotes = await readQuotes();
+    res.json(quotes);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const quotes = await readQuotes();
+    const quote = quotes.find((q) => q.id === req.params.id);
+    if (!quote) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+    res.json(quote);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/quotes', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const quotes = await readQuotes();
+    const newQuote = {
+      id: generateQuoteId(),
+      ...req.body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    quotes.push(newQuote);
+    await writeQuotes(quotes);
+    res.status(201).json(newQuote);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const quotes = await readQuotes();
+    const index = quotes.findIndex((q) => q.id === req.params.id);
+    if (index === -1) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    const updated = {
+      ...quotes[index],
+      ...req.body,
+      id: quotes[index].id,
+      createdAt: quotes[index].createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+    quotes[index] = updated;
+    await writeQuotes(quotes);
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const quotes = await readQuotes();
+    const index = quotes.findIndex((q) => q.id === req.params.id);
+    if (index === -1) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+    quotes.splice(index, 1);
+    await writeQuotes(quotes);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function createQuotePDFBuffer(quote) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const chunks = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // HEADER SECTION
+      doc.fontSize(22).font('Helvetica-Bold').text(quote.company.name, 50, 40);
+      doc.fontSize(9).font('Helvetica').text(quote.company.address, 50, 68);
+      doc.fontSize(9).text(`Phone: ${quote.quotation.salesPerson.phone} | GSTIN: ${quote.company.gstin}`, 50, 82);
+      doc.fontSize(9).text(`CIN: ${quote.company.companyId}`, 50, 96);
+
+      // Quotation stamp
+      doc.fontSize(28).font('Helvetica-Bold').fillColor('#C0C0C0').text('QUOTATION', 380, 50, {
+        align: 'right',
+        opacity: 0.3,
+      });
+      doc.fillColor('black');
+
+      doc.moveTo(50, 115).lineTo(550, 115).stroke();
+      doc.moveDown(0.5);
+
+      // QUOTE INFO SECTION
+      const infoBoxLeft = 50;
+      const infoBoxRight = 310;
+      const infoBoxWidth = 240;
+      const infoBoxHeight = 55;
+      const infoBoxTop = doc.y;
+
+      // Left box - Quote Details
+      doc.rect(infoBoxLeft, infoBoxTop, infoBoxWidth, infoBoxHeight).stroke();
+      doc.fontSize(9).font('Helvetica-Bold').text('QUOTATION DETAILS', infoBoxLeft + 8, infoBoxTop + 5, { width: infoBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Quote #: ${quote.quotation.quoteNumber}`, infoBoxLeft + 8, infoBoxTop + 20, { width: infoBoxWidth - 16 });
+      doc.text(`Type: ${quote.quotation.quoteType} | Date: ${new Date(quote.quotation.quotationDate).toLocaleDateString('en-IN')}`, infoBoxLeft + 8, infoBoxTop + 33, { width: infoBoxWidth - 16 });
+      doc.text(`Valid Until: ${new Date(quote.quotation.expiryDate).toLocaleDateString('en-IN')}`, infoBoxLeft + 8, infoBoxTop + 43, { width: infoBoxWidth - 16 });
+
+      // Right box - Reference Info
+      doc.rect(infoBoxRight, infoBoxTop, infoBoxWidth, infoBoxHeight).stroke();
+      doc.fontSize(9).font('Helvetica-Bold').text('REFERENCE', infoBoxRight + 8, infoBoxTop + 5, { width: infoBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Reference: ${quote.quotation.reference}`, infoBoxRight + 8, infoBoxTop + 20, { width: infoBoxWidth - 16 });
+      doc.text(`Place of Supply: ${quote.quotation.placeOfSupply}`, infoBoxRight + 8, infoBoxTop + 33, { width: infoBoxWidth - 16 });
+      doc.text(`Sales Person: ${quote.quotation.salesPerson.name}`, infoBoxRight + 8, infoBoxTop + 43, { width: infoBoxWidth - 16 });
+
+      doc.moveDown(4);
+
+      // BILL TO AND SHIP TO SECTION
+      const addressBoxWidth = 230;
+      const addressBoxHeight = 95;
+      const addressBoxY = doc.y;
+      const addressBoxLeft = 50;
+      const addressBoxRight = 310;
+
+      // Bill To Box
+      doc.rect(addressBoxLeft, addressBoxY, addressBoxWidth, addressBoxHeight).stroke();
+      doc.fontSize(10).font('Helvetica-Bold').text('BILL TO', addressBoxLeft + 8, addressBoxY + 5);
+      doc.fontSize(9).font('Helvetica-Bold').text(quote.customer.billTo.companyName, addressBoxLeft + 8, addressBoxY + 20, { width: addressBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      quote.customer.billTo.address.forEach((line, idx) => {
+        doc.text(line, addressBoxLeft + 8, addressBoxY + 33 + idx * 10, { width: addressBoxWidth - 16 });
+      });
+      doc.fontSize(8).font('Helvetica-Bold');
+      doc.text(`Contact: ${quote.customer.customerName}`, addressBoxLeft + 8, addressBoxY + 73, { width: addressBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Email: ${quote.customer.email}`, addressBoxLeft + 8, addressBoxY + 83, { width: addressBoxWidth - 16 });
+
+      // Ship To Box
+      doc.rect(addressBoxRight, addressBoxY, addressBoxWidth, addressBoxHeight).stroke();
+      doc.fontSize(10).font('Helvetica-Bold').text('SHIP TO', addressBoxRight + 8, addressBoxY + 5);
+      doc.fontSize(9).font('Helvetica-Bold').text(quote.customer.shipTo.companyName, addressBoxRight + 8, addressBoxY + 20, { width: addressBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      quote.customer.shipTo.address.forEach((line, idx) => {
+        doc.text(line, addressBoxRight + 8, addressBoxY + 33 + idx * 10, { width: addressBoxWidth - 16 });
+      });
+      doc.fontSize(8).font('Helvetica-Bold');
+      doc.text(`Phone: ${quote.customer.phone}`, addressBoxRight + 8, addressBoxY + 73, { width: addressBoxWidth - 16 });
+
+      doc.moveDown(9);
+
+      // LINE ITEMS TABLE
+      const tableTop = doc.y;
+      const col1 = 50,
+        col2 = 110,
+        col3 = 280,
+        col4 = 360,
+        col5 = 420,
+        col6 = 480;
+      const rowHeight = 18;
+      const pageWidth = 550;
+
+      // Table Header with background
+      doc.rect(col1 - 5, tableTop, pageWidth - col1 + 5, rowHeight).fillAndStroke('#2c3e50', '#2c3e50');
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('white');
+      doc.text('Item Code', col1, tableTop + 4, { width: 50 });
+      doc.text('Description', col2, tableTop + 4, { width: 160 });
+      doc.text('Qty', col3, tableTop + 4, { width: 50, align: 'center' });
+      doc.text('Unit Price (₹)', col4, tableTop + 4, { width: 50, align: 'right' });
+      doc.text('Discount', col5, tableTop + 4, { width: 50, align: 'center' });
+      doc.text('Total (₹)', col6, tableTop + 4, { width: 60, align: 'right' });
+
+      // Table body rows
+      doc.fillColor('black');
+      let currentY = tableTop + rowHeight;
+      let rowNum = 0;
+
+      quote.items.forEach((item) => {
+        if (rowNum % 2 === 0) {
+          doc.rect(col1 - 5, currentY, pageWidth - col1 + 5, rowHeight).fill('#f5f5f5');
+        }
+
+        doc.fontSize(8).font('Helvetica').fillColor('black');
+        doc.text(item.itemCode || '-', col1, currentY + 4, { width: 50 });
+        doc.text(item.description, col2, currentY + 4, { width: 160 });
+        doc.text(String(item.quantity), col3, currentY + 4, { width: 50, align: 'center' });
+        doc.text(`₹${item.unitPrice.toLocaleString('en-IN')}`, col4, currentY + 4, { width: 50, align: 'right' });
+        doc.text(`${item.discountPercent}%`, col5, currentY + 4, { width: 50, align: 'center' });
+        doc.text(`₹${item.lineTotal.toLocaleString('en-IN')}`, col6, currentY + 4, { width: 60, align: 'right' });
+
+        doc.moveTo(col1 - 5, currentY + rowHeight).lineTo(pageWidth, currentY + rowHeight).stroke();
+        currentY += rowHeight;
+        rowNum++;
+      });
+
+      doc.moveDown(0.5);
+
+      // TOTALS SECTION
+      const totalsX = 380;
+      const totalsY = doc.y;
+
+      doc.fontSize(9).font('Helvetica');
+      doc.text('Subtotal:', totalsX, totalsY, { width: 80, align: 'right' });
+      doc.text(`₹${quote.totals.subTotal.toLocaleString('en-IN')}`, totalsX + 85, totalsY, { width: 60, align: 'right' });
+      doc.text(`GST (${quote.taxes.gstPercentage}%):`, totalsX, totalsY + 15, { width: 80, align: 'right' });
+      doc.text(`₹${quote.taxes.gstAmount.toLocaleString('en-IN')}`, totalsX + 85, totalsY + 15, { width: 60, align: 'right' });
+
+      doc.rect(totalsX - 5, totalsY + 28, 150, 22).fillAndStroke('#2c3e50', '#2c3e50');
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('white');
+      doc.text('GRAND TOTAL:', totalsX + 2, totalsY + 32, { width: 78, align: 'right' });
+      doc.text(`₹${quote.totals.grandTotal.toLocaleString('en-IN')}`, totalsX + 85, totalsY + 32, { width: 60, align: 'right' });
+
+      doc.fillColor('black');
+      doc.moveDown(3);
+
+      // Amount in words
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Amount in Words: ${quote.totals.amountInWords}`, 50, doc.y);
+      doc.moveDown(0.5);
+
+      // COMMERCIAL TERMS SECTION
+      doc.fontSize(10).font('Helvetica-Bold').text('Commercial Terms & Conditions', { underline: true });
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`• Payment Terms: ${quote.commercials.paymentTerms}`);
+      doc.text(`• Delivery Schedule: ${quote.commercials.deliverySchedule}`);
+      doc.text(`• Shipping Charges: ${quote.commercials.shippingCharges}`);
+      doc.moveDown(0.5);
+
+      // BANK DETAILS SECTION
+      const bankBoxTop = doc.y;
+      doc.rect(50, bankBoxTop, 500, 65).stroke();
+      doc.fontSize(10).font('Helvetica-Bold').text('Bank Details for Payment', 58, bankBoxTop + 5);
+      doc.fontSize(8).font('Helvetica');
+      const col1Bank = 58,
+        col2Bank = 280;
+      doc.text(`Account Name: ${quote.bankDetails.accountName}`, col1Bank, bankBoxTop + 20);
+      doc.text(`Bank Name: ${quote.bankDetails.bankName}`, col2Bank, bankBoxTop + 20);
+      doc.text(`Account Number: ${quote.bankDetails.accountNumber}`, col1Bank, bankBoxTop + 33);
+      doc.text(`Branch: ${quote.bankDetails.branchAddress}`, col2Bank, bankBoxTop + 33);
+      doc.text(`GSTIN: ${quote.company.gstin}`, col1Bank, bankBoxTop + 46);
+      doc.text(`CIN: ${quote.company.companyId}`, col2Bank, bankBoxTop + 46);
+
+      doc.moveDown(5);
+
+      // FOOTER SECTION
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+      doc.fontSize(8).font('Helvetica').text('Authorized Signatory', 50, doc.y + 10);
+      doc.text(quote.signature.authorizedPerson, 50, doc.y + 20);
+      doc.fontSize(7).font('Helvetica').fillColor('#666666');
+      doc.text(`This quotation is valid till ${new Date(quote.quotation.expiryDate).toLocaleDateString('en-IN')}. Terms and conditions apply.`, 50, doc.y + 35, { align: 'center' });
+      doc.text(`Generated on ${new Date().toLocaleString('en-IN')} | Quote ID: ${quote.id}`, 50, doc.y + 10, { align: 'center' });
+      doc.text('© ' + quote.company.name + ' - Confidential', 50, doc.y + 5, { align: 'center' });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+// Generate PDF endpoint
+app.get('/api/quotes/:id/pdf', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const quotes = await readQuotes();
+    const quote = quotes.find((q) => q.id === req.params.id);
+    if (!quote) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    const pdfBuffer = await createQuotePDFBuffer(quote);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Quote_${quote.quotation.quoteNumber}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send email endpoint
+app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const quotes = await readQuotes();
+    const quote = quotes.find((q) => q.id === req.params.id);
+    if (!quote) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    const recipients = req.body;
+    if (!recipients || recipients.length === 0) {
+      return res.status(400).json({ error: 'At least one recipient is required' });
+    }
+
+    if (!emailClient) {
+      return res.status(503).json({ error: 'Email service is not available' });
+    }
+
+    try {
+      const data = recipients;
+      const emailRecipients = data.recipients.recipients[0];
+      const subject = data.recipients.subject;
+      const message = data.recipients.message;
+      // Prepare email content
+      const emailSubject = subject || `Quotation ${quote.quotation.quoteNumber}`;
+      const htmlText = generateQuotationEmailHTML(quote, message);
+      const plainText = generateQuotationPlainText(quote, message);
+
+      const groupEmails = emailRecipients
+      ? emailRecipients.split(/[;,]+/).map((e) => e.trim()).filter(Boolean)
+      : [];
+
+    const toRecipients = [
+      ...groupEmails.map((email) => ({ address: email })),
+    ];
+
+      // Send email to each recipient
+      const pdfBuffer = await createQuotePDFBuffer(quote);
+      const attachmentName = `Quote_${quote.quotation.quoteNumber}.pdf`;
+      const attachmentBase64 = pdfBuffer.toString("base64");
+
+      const emailMessage = {
+        senderAddress: "DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net",
+        content: {
+          subject: subject,
+          plainText: plainText,
+          html: htmlText,
+          attachments: [
+            {
+              name: attachmentName,
+              contentType: 'application/pdf',
+              contentInBase64: attachmentBase64,
+            },
+          ],
+        },
+        recipients: {
+          to: toRecipients,
+        },
+      };
+
+      if (typeof emailClient.send === 'function') {
+        await emailClient.send(emailMessage);
+      } else if (typeof emailClient.sendEmail === 'function') {
+        await emailClient.sendEmail(emailMessage);
+      } else if (typeof emailClient.beginSend === 'function') {
+        const poller = await emailClient.beginSend(emailMessage);
+        if (poller && typeof poller.pollUntilDone === 'function') {
+          await poller.pollUntilDone();
+        }
+      } else {
+        console.warn('No supported send method found on emailClient; email not sent');
+      }
+
+      // Update quote status to "Sent"
+      // const index = quotes.findIndex((q) => q.id === req.params.id);
+      // if (index !== -1) {
+      //   quotes[index].status = 'Sent';
+      //   quotes[index].sentAt = new Date().toISOString();
+      //   quotes[index].sentTo = recipients;
+      //   await writeQuotes(quotes);
+      // }
+
+      res.json({ success: true, message: `Email sent to ${recipients.length} recipient(s)` });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      res.status(500).json({ error: 'Failed to send email: ' + emailError.message });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to generate HTML email content
+function generateQuotationEmailHTML(quote, customMessage = '') {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 30px; color: white; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .content { padding: 30px; }
+        .greeting { font-size: 16px; margin-bottom: 20px; }
+        .message { background: #f9f9f9; padding: 15px; border-left: 4px solid #2c3e50; margin: 20px 0; border-radius: 4px; }
+        .quote-summary { background: #ecf7ed; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        .summary-row { display: flex; justify-content: space-between; margin: 8px 0; }
+        .summary-label { font-weight: 600; }
+        .button { display: inline-block; background: #2c3e50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0; }
+        .footer { background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; }
+        .company-info { font-size: 13px; margin-top: 15px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 Quotation ${quote.quotation.quoteNumber}</h1>
+            <p>From ${quote.company.name}</p>
+        </div>
+        <div class="content">
+            <div class="greeting">
+                Dear ${quote.customer.customerName},
+            </div>
+            <p>Thank you for your interest in our products and services. We are pleased to send you the quotation as requested.</p>
+            
+            ${customMessage ? `<div class="message">${customMessage}</div>` : ''}
+
+            <div class="quote-summary">
+                <div class="summary-row">
+                    <span class="summary-label">Quote Number:</span>
+                    <span>${quote.quotation.quoteNumber}</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Quote Date:</span>
+                    <span>${new Date(quote.quotation.quotationDate).toLocaleDateString('en-IN')}</span>
+                </div>
+                <div class="summary-row">
+                    <span class="summary-label">Valid Until:</span>
+                    <span>${new Date(quote.quotation.expiryDate).toLocaleDateString('en-IN')}</span>
+                </div>
+                <div class="summary-row" style="border-top: 1px solid #ccc; padding-top: 8px; margin-top: 8px; font-weight: bold; font-size: 16px;">
+                    <span>Total Amount:</span>
+                    <span>₹${quote.totals.grandTotal.toLocaleString('en-IN')}</span>
+                </div>
+            </div>
+
+            <p><strong>Items Summary:</strong></p>
+            <table style="width: 100%; font-size: 13px; margin: 15px 0;">
+                <tr style="background: #f5f5f5;">
+                    <th style="text-align: left; padding: 8px;">Description</th>
+                    <th style="text-align: center; padding: 8px;">Qty</th>
+                    <th style="text-align: right; padding: 8px;">Amount</th>
+                </tr>
+                ${quote.items.map((item) => `<tr><td style="padding: 8px;">${item.description}</td><td style="text-align: center; padding: 8px;">${item.quantity}</td><td style="text-align: right; padding: 8px;">₹${item.lineTotal.toLocaleString('en-IN')}</td></tr>`).join('')}
+            </table>
+
+            <p><strong>Payment Terms:</strong> ${quote.commercials.paymentTerms}</p>
+            <p><strong>Delivery Schedule:</strong> ${quote.commercials.deliverySchedule}</p>
+
+            <p>Please review the attached quotation for detailed information and specifications. Should you have any questions or require further clarification, please don't hesitate to contact us.</p>
+
+            <p>
+                Best regards,<br>
+                <strong>${quote.quotation.salesPerson.name}</strong><br>
+                ${quote.company.name}<br>
+                Phone: ${quote.quotation.salesPerson.phone}
+            </p>
+
+            <div class="company-info">
+                <div>${quote.company.address}</div>
+                <div>GSTIN: ${quote.company.gstin}</div>
+            </div>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} ${quote.company.name}. All rights reserved.</p>
+            <p>This quotation is confidential and intended for the use of the recipient only.</p>
+        </div>
+    </div>
+</body>
+</html>
+  `;
+}
+
+// Helper function to generate plain text email
+function generateQuotationPlainText(quote, customMessage = '') {
+  return `
+QUOTATION ${quote.quotation.quoteNumber}
+${'='.repeat(50)}
+
+Dear ${quote.customer.customerName},
+
+Thank you for your interest in our products and services. We are pleased to send you the quotation as requested.
+
+${customMessage ? customMessage + '\n' : ''}
+
+QUOTATION DETAILS
+Quote Number: ${quote.quotation.quoteNumber}
+Quote Date: ${new Date(quote.quotation.quotationDate).toLocaleDateString('en-IN')}
+Valid Until: ${new Date(quote.quotation.expiryDate).toLocaleDateString('en-IN')}
+
+LINE ITEMS
+${'='.repeat(50)}
+${quote.items.map((item) => `${item.description}
+  Quantity: ${item.quantity}
+  Unit Price: ₹${item.unitPrice.toLocaleString('en-IN')}
+  Discount: ${item.discountPercent}%
+  Line Total: ₹${item.lineTotal.toLocaleString('en-IN')}`).join('\n\n')}
+
+TOTALS
+${'='.repeat(50)}
+Subtotal: ₹${quote.totals.subTotal.toLocaleString('en-IN')}
+GST (${quote.taxes.gstPercentage}%): ₹${quote.taxes.gstAmount.toLocaleString('en-IN')}
+GRAND TOTAL: ₹${quote.totals.grandTotal.toLocaleString('en-IN')}
+In Words: ${quote.totals.amountInWords}
+
+COMMERCIAL TERMS
+Payment Terms: ${quote.commercials.paymentTerms}
+Delivery Schedule: ${quote.commercials.deliverySchedule}
+Shipping Charges: ${quote.commercials.shippingCharges}
+
+COMPANY INFORMATION
+${quote.company.name}
+${quote.company.address}
+GSTIN: ${quote.company.gstin}
+
+Please review the attached quotation for detailed information and specifications. Should you have any questions or require further clarification, please don't hesitate to contact us.
+
+Best regards,
+${quote.quotation.salesPerson.name}
+Phone: ${quote.quotation.salesPerson.phone}
+
+© ${new Date().getFullYear()} ${quote.company.name}. All rights reserved.
+This quotation is confidential and intended for the use of the recipient only.
+  `;
+}
 
 app.use(express.static(CLIENT_BUILD_PATH));
 

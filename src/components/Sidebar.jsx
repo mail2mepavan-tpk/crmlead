@@ -11,6 +11,7 @@ import {
   Tag,
   Mail,
   Briefcase,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -135,6 +136,12 @@ export default function Sidebar({ isOpen, onClose }) {
                   onClose={onClose}
                   icon={Mail}
                   label="Email Groups"
+                />
+                <NavItem
+                  to="/quotations"
+                  onClose={onClose}
+                  icon={FileText}
+                  label="Quotations"
                 />
               </div>
             </>

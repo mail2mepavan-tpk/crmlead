@@ -305,15 +305,21 @@ export default function Dashboard() {
                       <td className="px-4 py-4 text-slate-700">{lead.leadStatus || 'New'}</td>
                       <td className="px-4 py-4 text-slate-700">{lead.leadRegion || '—'}</td>
                       <td className="px-4 py-4 text-slate-700">{lead.receivedDate || '—'}</td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-slate-700">
                         <div className="flex justify-center gap-2">
-                          <Link
-                            to={`/sales-leads/${lead.id}/edit`}
-                            className="rounded border border-slate-200 bg-white p-2 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
-                            title="Edit lead"
-                          >
+                          {lead.leadStatus != 'Converted' ? (
+                            <Link
+                              to={`/sales-leads/${lead.id}/edit`}
+                              className="rounded border border-slate-200 bg-white p-2 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                              title="Edit lead"
+                            >
                             <Pencil className="size-4" />
                           </Link>
+                          ) : (
+                            <span style={{ color: 'red' }} title="No Edit lead">
+                              Locked
+                            </span>
+                          ) }
                           <button
                             type="button"
                             onClick={() => handleDelete(lead.id, lead.title)}

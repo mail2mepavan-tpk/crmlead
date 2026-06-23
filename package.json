@@ -19,6 +19,7 @@
     "express": "^5.1.0",
     "lucide-react": "^1.16.0",
     "mssql": "^12.5.5",
+    "pdfkit": "^0.13.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.15.1",

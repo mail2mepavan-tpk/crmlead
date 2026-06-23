@@ -1,0 +1,104 @@
+{
+  "email": {
+    "subject": "Quotation ALS/26-27/113/HW - Automatic Filter Integrity Tester",
+    "from": "sales@aarunilifesciences.com",
+    "to": [
+      "purchase@vickrobiopharma.com"
+    ],
+    "cc": [],
+    "replyTo": "sales@aarunilifesciences.com"
+  },
+  "company": {
+    "name": "Aaruni Lifesciences Private Limited",
+    "companyId": "U74999KA2021PTC146762",
+    "gstin": "29AAVCA1290J1Z4",
+    "address": "V-29, 9th Main Road, 2nd Stage, Peenya Industrial Area, Bangalore, Karnataka - 560058"
+  },
+  "quotation": {
+    "quoteNumber": "ALS/26-27/113/HW",
+    "quoteType": "Initial",
+    "quotationDate": "2026-05-19",
+    "expiryDate": "2026-06-18",
+    "placeOfSupply": "Hyderabad",
+    "reference": "Visit",
+    "salesPerson": {
+      "name": "Rajrita Mitra",
+      "phone": "7981745015"
+    }
+  },
+  "customer": {
+    "customerName": "K.V.V. Narayana",
+    "phone": "9966268577",
+    "email": "purchase@vickrobiopharma.com",
+    "billTo": {
+      "companyName": "VICKRO BIOPHARMA PRIVATE LIMITED",
+      "address": [
+        "Plot No 7, Survey No 451",
+        "Door No. 5-5-35/275/2/1",
+        "Prashanti Nagar",
+        "Shakti Puram IDA",
+        "Kukatpally",
+        "Hyderabad",
+        "TG 500072"
+      ]
+    },
+    "shipTo": {
+      "companyName": "VICKRO BIOPHARMA PRIVATE LIMITED",
+      "address": [
+        "Plot No 7, Survey No 451",
+        "Door No. 5-5-35/275/2/1",
+        "Prashanti Nagar",
+        "Shakti Puram IDA",
+        "Kukatpally",
+        "Hyderabad",
+        "TG 500072"
+      ]
+    }
+  },
+  "items": [
+    {
+      "lineNumber": 1,
+      "itemCode": "MFIT-A3",
+      "description": "Automatic Filter Integrity Tester",
+      "quantity": 1,
+      "unitPrice": 1200000,
+      "discountPercent": 10,
+      "discountAmount": 120000,
+      "priceAfterDiscount": 1080000,
+      "lineTotal": 1080000
+    }
+  ],
+  "commercials": {
+    "shippingCharges": "At actuals",
+    "deliverySchedule": "4-6 Weeks",
+    "paymentTerms": "50% advance, balance against proforma"
+  },
+  "taxes": {
+    "gstPercentage": 18,
+    "gstAmount": 194400
+  },
+  "totals": {
+    "subTotal": 1080000,
+    "grandTotal": 1274400,
+    "amountInWords": "Twelve Lakhs Seventy Four Thousand Four Hundred Rupees"
+  },
+  "bankDetails": {
+    "accountName": "AARUNI LIFESCIENCES SOLUTIONS PRIVATE LIMITED",
+    "bankName": "IDFC FIRST BANK",
+    "accountNumber": "10073636071",
+    "branchAddress": "Ground Floor, Trinity Complex Kalyan Nagar ORR, Bangalore 560043"
+  },
+  "signature": {
+    "authorizedPerson": "Shashikanth Agnihotry S"
+  },
+  "emailTemplate": {
+    "greeting": "Dear {{customer.customerName}},",
+    "body": [
+      "Thank you for your interest in our products.",
+      "Please find attached quotation {{quotation.quoteNumber}} for your review.",
+      "Kindly contact us for any clarifications."
+    ],
+    "closing": "Best Regards,",
+    "footer": "{{company.name}}"
+  }
+}

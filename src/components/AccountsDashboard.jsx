@@ -72,9 +72,9 @@ export default function AccountsDashboard() {
       account.city,
       account.state,
       account.country,
-    ];
-     // .filter(Boolean)
-     // .some((field) => field.toLowerCase().includes(term));
+    ]
+      .filter(Boolean)
+      .some((field) => field.toLowerCase().includes(term));
   });
 
   if (loading) {

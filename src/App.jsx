@@ -18,6 +18,8 @@ import SalesLeadsDashboard from './components/SalesLeadsDashboard';
 import SalesLeadForm from './components/SalesLeadForm';
 import DealsDashboard from './components/DealsDashboard';
 import DealForm from './components/DealForm';
+import QuotationsDashboard from './components/QuotationsDashboard';
+import QuotationForm from './components/QuotationForm';
 import LoginPage from './components/LoginPage';
 import {
   PublicRoute,
@@ -65,6 +67,9 @@ export default function EnquiryManagementSystem() {
               <Route path="/email-groups" element={<EmailGroupsDashboard />} />
               <Route path="/email-groups/new" element={<EmailGroupForm />} />
               <Route path="/email-groups/:id/edit" element={<EmailGroupForm />} />
+              <Route path="/quotations" element={<QuotationsDashboard />} />
+              <Route path="/quotations/new" element={<QuotationForm />} />
+              <Route path="/quotations/:id/edit" element={<QuotationForm />} />
             </Route>
           </Route>
         </Route>

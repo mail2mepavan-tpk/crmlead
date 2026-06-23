@@ -1,0 +1,94 @@
+[
+  {
+    "id": "Q1782138432900vec5fcofx",
+    "email": {
+      "subject": "",
+      "from": "",
+      "to": [],
+      "cc": [],
+      "replyTo": ""
+    },
+    "company": {
+      "name": "aromi",
+      "companyId": "345fdsfsdfer",
+      "gstin": "sdfsdfe3532453245",
+      "address": "bangalore"
+    },
+    "quotation": {
+      "quoteNumber": "werwqer",
+      "quoteType": "Initial",
+      "quotationDate": "2026-06-22",
+      "expiryDate": "2026-06-27",
+      "placeOfSupply": "hyderabad",
+      "reference": "visit",
+      "salesPerson": {
+        "name": "VIIV",
+        "phone": "3453245"
+      }
+    },
+    "customer": {
+      "customerName": "vivkro",
+      "phone": "523532453425",
+      "email": "getme1.pavan@gmail.com",
+      "billTo": {
+        "companyName": "honoe 111, strett industr, aread, hyderabad, Telangana - 560043",
+        "address": []
+      },
+      "shipTo": {
+        "companyName": "honoe 111, strett industr, aread, hyderabad, Telangana - 560043",
+        "address": []
+      }
+    },
+    "items": [
+      {
+        "lineNumber": 1,
+        "itemCode": "wqr",
+        "description": "server",
+        "quantity": 1,
+        "unitPrice": 1230000,
+        "discountPercent": 10,
+        "discountAmount": 123000,
+        "priceAfterDiscount": 1107000,
+        "lineTotal": 1107000
+      },
+      {
+        "lineNumber": 2,
+        "itemCode": "45df",
+        "description": "consu",
+        "quantity": 1,
+        "unitPrice": 454500,
+        "discountPercent": 5,
+        "discountAmount": 22725,
+        "priceAfterDiscount": 431775,
+        "lineTotal": 431775
+      }
+    ],
+    "commercials": {
+      "shippingCharges": "At actuals",
+      "deliverySchedule": "5 weeks",
+      "paymentTerms": "50% advance"
+    },
+    "taxes": {
+      "gstPercentage": 18,
+      "gstAmount": 276979.5
+    },
+    "totals": {
+      "subTotal": 1538775,
+      "gstAmount": 276979.5,
+      "grandTotal": 1815754.5,
+      "amountInWords": "One Crore Eighty One Lakh Fifty Seven Thousand Fifty Five Rupees"
+    },
+    "bankDetails": {
+      "accountName": "account name",
+      "bankName": "test bak",
+      "accountNumber": "342534255",
+      "branchAddress": "bangalore"
+    },
+    "signature": {
+      "authorizedPerson": "jone"
+    },
+    "status": "Sent",
+    "createdAt": "2026-06-22T14:27:12.900Z",
+    "updatedAt": "2026-06-23T13:01:38.106Z"
+  }
+]
