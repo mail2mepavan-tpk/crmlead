@@ -37,6 +37,7 @@ const TABLES = {
   salesRegions: 'SalesRegions',
   leadSources: 'LeadSources',
   emailGroups: 'EmailGroups',
+  quotations: 'Quotations',
 };
 
 let dbPool = null;
@@ -299,22 +300,43 @@ const readSalesRegions = () => readTable(TABLES.salesRegions);
 const writeSalesRegions = (data) => writeTable(TABLES.salesRegions, data);
 const updateSalesRegions = (row) => writeUpdate(TABLES.salesRegions, row);
 const deleteSalesRegions = (id) => deleteTable(TABLES.salesRegions, 'id', id);
+const readQuotations = readQuotes;
+const writeQuotations = async (data) => writeQuotes(data);
+const updateQuotations = (row) => writeUpdate(TABLES.quotations, row);
+const deleteQuotations = (id) => deleteTable(TABLES.quotations, 'QuoteId', id);
 const updateTable = writeUpdate;
 
-// Quotation file-based storage
-const QUOTES_FILE = path.join(__dirname, '..', 'data', 'quotes.json');
-
+// Quotation storage now uses the database table `Quotations`.
 async function readQuotes() {
   try {
-    const data = await fs.readFile(QUOTES_FILE, 'utf-8');
-    return JSON.parse(data);
+    const rows = await queryDb(`SELECT QuoteId, QuotationJson, CreatedDate, UpdatedDate FROM ${TABLES.quotations}`);
+    return rows.map((r) => {
+      const parsed = safeParseJson(r.QuotationJson);
+      const quoteObj = typeof parsed === 'object' ? parsed : safeParseJson(String(r.QuotationJson || '{}'));
+      const result = { ...(quoteObj || {}), id: r.QuoteId };
+      if (r.CreatedDate) result.createdAt = new Date(r.CreatedDate).toISOString();
+      if (r.UpdatedDate) result.updatedAt = new Date(r.UpdatedDate).toISOString();
+      return result;
+    });
   } catch (error) {
+    console.error('readQuotes error:', error && error.message ? error.message : error);
     return [];
   }
 }
 
 async function writeQuotes(quotes) {
-  await fs.writeFile(QUOTES_FILE, JSON.stringify(quotes, null, 2));
+  // Upsert each quote row into the Quotations table.
+  for (const q of quotes) {
+    const QuoteId = q.id || q.QuoteId || generateQuoteId();
+    const QuotationJson = typeof q === 'string' ? q : JSON.stringify(q);
+    const row = {
+      QuoteId,
+      QuotationJson,
+      UpdatedDate: new Date().toISOString(),
+    };
+    if (q.createdAt) row.CreatedDate = new Date(q.createdAt);
+    await writeUpdate(TABLES.quotations, row);
+  }
 }
 
 function generateQuoteId() {
@@ -2165,7 +2187,7 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
 // Quotation API Routes
 app.get('/api/quotes', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const quotes = await readQuotes();
+    const quotes = await readQuotations();
     res.json(quotes);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2187,15 +2209,21 @@ app.get('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
 
 app.post('/api/quotes', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const quotes = await readQuotes();
     const newQuote = {
       id: generateQuoteId(),
       ...req.body,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    quotes.push(newQuote);
-    await writeQuotes(quotes);
+
+    // Upsert single quotation row
+    await writeUpdate(TABLES.quotations, {
+      QuoteId: newQuote.id,
+      QuotationJson: JSON.stringify(newQuote),
+      CreatedDate: new Date(newQuote.createdAt),
+      UpdatedDate: new Date(newQuote.updatedAt),
+    });
+
     res.status(201).json(newQuote);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2205,21 +2233,36 @@ app.post('/api/quotes', requireAuth, requireAdmin, async (req, res) => {
 app.put('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const quotes = await readQuotes();
-    const index = quotes.findIndex((q) => q.id === req.params.id);
-    if (index === -1) {
+    const existing = quotes.find((q) => q.id === req.params.id);
+    if (!existing) {
       return res.status(404).json({ error: 'Quotation not found' });
     }
 
     const updated = {
-      ...quotes[index],
+      ...existing,
       ...req.body,
-      id: quotes[index].id,
-      createdAt: quotes[index].createdAt,
+      id: existing.id,
+      createdAt: existing.createdAt,
       updatedAt: new Date().toISOString(),
     };
-    quotes[index] = updated;
-    await writeQuotes(quotes);
+
+    await writeUpdate(TABLES.quotations, {
+      QuoteId: updated.id,
+      QuotationJson: JSON.stringify(updated),
+      UpdatedDate: new Date(updated.updatedAt),
+    });
+
     res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    // delete by QuoteId
+    await deleteTable(TABLES.quotations, 'QuoteId', req.params.id);
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

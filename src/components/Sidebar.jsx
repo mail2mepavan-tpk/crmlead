@@ -12,6 +12,7 @@ import {
   Mail,
   Briefcase,
   FileText,
+  ArrowUpRight,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -142,6 +143,12 @@ export default function Sidebar({ isOpen, onClose }) {
                   onClose={onClose}
                   icon={FileText}
                   label="Quotations"
+                />
+                <NavItem
+                  to="/revenue"
+                  onClose={onClose}
+                  icon={ArrowUpRight}
+                  label="Revenue Dashboard"
                 />
               </div>
             </>
