@@ -2305,6 +2305,7 @@ async function createQuotePDFBuffer(quote) {
       });
       doc.fillColor('black');
 
+       doc.moveDown(1);
       doc.moveTo(50, 115).lineTo(550, 115).stroke();
       doc.moveDown(0.5);
 
@@ -2331,7 +2332,7 @@ async function createQuotePDFBuffer(quote) {
       doc.text(`Place of Supply: ${quote.quotation.placeOfSupply}`, infoBoxRight + 8, infoBoxTop + 33, { width: infoBoxWidth - 16 });
       doc.text(`Sales Person: ${quote.quotation.salesPerson.name}`, infoBoxRight + 8, infoBoxTop + 43, { width: infoBoxWidth - 16 });
 
-      doc.moveDown(4);
+      doc.moveDown(1);
 
       // BILL TO AND SHIP TO SECTION
       const addressBoxWidth = 230;
@@ -2364,7 +2365,7 @@ async function createQuotePDFBuffer(quote) {
       doc.fontSize(8).font('Helvetica-Bold');
       doc.text(`Phone: ${quote.customer.phone}`, addressBoxRight + 8, addressBoxY + 73, { width: addressBoxWidth - 16 });
 
-      doc.moveDown(9);
+      doc.moveDown(3);
 
       // LINE ITEMS TABLE
       const tableTop = doc.y;
@@ -2410,7 +2411,7 @@ async function createQuotePDFBuffer(quote) {
         rowNum++;
       });
 
-      doc.moveDown(0.5);
+      doc.moveDown(1);
 
       // TOTALS SECTION
       const totalsX = 380;
@@ -2422,18 +2423,18 @@ async function createQuotePDFBuffer(quote) {
       doc.text(`GST (${quote.taxes.gstPercentage}%):`, totalsX, totalsY + 15, { width: 80, align: 'right' });
       doc.text(`₹${quote.taxes.gstAmount.toLocaleString('en-IN')}`, totalsX + 85, totalsY + 15, { width: 60, align: 'right' });
 
-      doc.rect(totalsX - 5, totalsY + 28, 150, 22).fillAndStroke('#2c3e50', '#2c3e50');
+      doc.rect(totalsX - 5, totalsY + 28, 180, 22).fillAndStroke('#b8bab3', '#cae8d1');
       doc.fontSize(11).font('Helvetica-Bold').fillColor('white');
-      doc.text('GRAND TOTAL:', totalsX + 2, totalsY + 32, { width: 78, align: 'right' });
-      doc.text(`₹${quote.totals.grandTotal.toLocaleString('en-IN')}`, totalsX + 85, totalsY + 32, { width: 60, align: 'right' });
+      doc.text('GRAND TOTAL:', totalsX + 2, totalsY + 34, { width: 200, align: 'left' });
+      doc.text(`₹${quote.totals.grandTotal.toLocaleString('en-IN')}`, totalsX + 84, totalsY + 34, { width: 200, align: 'left' });
 
       doc.fillColor('black');
-      doc.moveDown(3);
+      doc.moveDown(1);
 
       // Amount in words
       doc.fontSize(8).font('Helvetica');
       doc.text(`Amount in Words: ${quote.totals.amountInWords}`, 50, doc.y);
-      doc.moveDown(0.5);
+      doc.moveDown(1);
 
       // COMMERCIAL TERMS SECTION
       doc.fontSize(10).font('Helvetica-Bold').text('Commercial Terms & Conditions', { underline: true });
@@ -2457,10 +2458,10 @@ async function createQuotePDFBuffer(quote) {
       doc.text(`GSTIN: ${quote.company.gstin}`, col1Bank, bankBoxTop + 46);
       doc.text(`CIN: ${quote.company.companyId}`, col2Bank, bankBoxTop + 46);
 
-      doc.moveDown(5);
+      doc.moveDown(2);
 
       // FOOTER SECTION
-      doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+      doc.moveTo(47, doc.y).lineTo(550, doc.y).stroke();
       doc.fontSize(8).font('Helvetica').text('Authorized Signatory', 50, doc.y + 10);
       doc.text(quote.signature.authorizedPerson, 50, doc.y + 20);
       doc.fontSize(7).font('Helvetica').fillColor('#666666');

@@ -10,6 +10,7 @@ import {
   calculateGrandTotal,
   numberToWords,
 } from '../utils/quoteStorage';
+import { getDealById } from '../utils/dealStorage';
 import { useAuth } from '../context/AuthContext';
 
 const fieldClass = (hasError) =>
@@ -21,6 +22,7 @@ const fieldClass = (hasError) =>
   ].join(' ');
 
 const emptyQuote = () => ({
+  dealid: '',
   email: {
     subject: '',
     from: '',
@@ -100,7 +102,7 @@ const emptyItem = () => ({
 
 export default function QuotationForm() {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id, dealId } = useParams();
   const isEditing = Boolean(id);
   const { currentUser } = useAuth();
 
@@ -140,6 +142,34 @@ export default function QuotationForm() {
       cancelled = true;
     };
   }, [id, isEditing]);
+
+  useEffect(() => {
+    if (isEditing || !dealId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setLoadError('');
+        const deal = await getDealById(dealId);
+        if (!cancelled) {
+          setFormData((prev) => ({ ...prev, dealid: deal.id || dealId }));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError('Could not load deal information.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dealId, isEditing]);
 
   const handleQuotationChange = (e) => {
     const { name, value } = e.target;

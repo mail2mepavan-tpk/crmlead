@@ -71,6 +71,7 @@ export default function EnquiryManagementSystem() {
               <Route path="/quotations" element={<QuotationsDashboard />} />
               <Route path="/quotations/new" element={<QuotationForm />} />
               <Route path="/quotations/:id/edit" element={<QuotationForm />} />
+              <Route path="/quotations/new/deal/:dealId" element={<QuotationForm />} />
               <Route path="/revenue" element={<RevenueDashboard />} />
             </Route>
           </Route>
