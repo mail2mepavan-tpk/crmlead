@@ -6,4 +6,13 @@ import apiPlugin from './server/vite-plugin.js'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), apiPlugin()],
+  server: {
+    middlewareMode: false,
+    sourcemap: true,
+    port: 5173,
+    strictPort: false,
+  },
+  build: {
+    sourcemap: true,
+  },
 })

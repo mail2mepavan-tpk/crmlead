@@ -73,28 +73,41 @@ export const numberToWords = (num) => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
   const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-  const scales = ['', 'Thousand', 'Lakh', 'Crore'];
 
-  if (num === 0) return 'Zero';
-
-  const convertBelowThousand = (n) => {
+  const convertBelowHundred = (n) => {
     if (n === 0) return '';
     if (n < 10) return ones[n];
     if (n < 20) return teens[n - 10];
-    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
-    return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + convertBelowThousand(n % 100) : '');
+    return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
   };
 
-  const parts = [];
-  let scaleIndex = 0;
-
-  while (num > 0) {
-    if (num % 100 !== 0) {
-      parts.unshift(convertBelowThousand(num % 100) + (scales[scaleIndex] ? ' ' + scales[scaleIndex] : ''));
+  const convert = (n) => {
+    if (n === 0) return '';
+    if (n < 100) return convertBelowHundred(n);
+    if (n < 1000) {
+      const hundredPart = ones[Math.floor(n / 100)];
+      const remainder = n % 100;
+      return remainder ? `${hundredPart} Hundred ${convert(remainder)}` : `${hundredPart} Hundred`;
     }
-    num = Math.floor(num / 100);
-    scaleIndex++;
-  }
+    if (n < 100000) {
+      const thousandPart = Math.floor(n / 1000);
+      const remainder = n % 1000;
+      return remainder ? `${convert(thousandPart)} Thousand ${convert(remainder)}` : `${convert(thousandPart)} Thousand`;
+    }
+    if (n < 10000000) {
+      const lakhPart = Math.floor(n / 100000);
+      const remainder = n % 100000;
+      return remainder ? `${convert(lakhPart)} Lakh ${convert(remainder)}` : `${convert(lakhPart)} Lakh`;
+    }
 
-  return parts.join(' ').trim() + ' Rupees';
+    const crorePart = Math.floor(n / 10000000);
+    const remainder = n % 10000000;
+    return remainder ? `${convert(crorePart)} Crore ${convert(remainder)}` : `${convert(crorePart)} Crore`;
+  };
+
+  const value = Math.trunc(Number(num));
+  if (!Number.isFinite(value) || value < 0) return 'Invalid amount';
+  if (value === 0) return 'Zero Rupees';
+
+  return `${convert(value).trim()} Rupees`;
 };

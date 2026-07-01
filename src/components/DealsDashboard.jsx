@@ -168,7 +168,8 @@ export default function DealsDashboard() {
                           <button type="button" onClick={() => handleDelete(d.id, d.dealName)} className="rounded border border-red-200 bg-red-50 p-2 text-red-600 transition-all hover:bg-red-100" title="Delete deal"><Trash2 className="size-4" /></button>
                         </div>
                       </td>
-                  </tr>) : 
+                  </tr>
+                  ) : 
                     (
                       <tr key={d.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50">
                       <td className="px-4 py-4 font-semibold text-slate-900">{d.dealName}</td>
@@ -182,6 +183,15 @@ export default function DealsDashboard() {
                               to={`/deals/${d.id}/edit`}
                               className="rounded border border-red-200 bg-red-50 p-2 text-red-600 transition-all hover:bg-red-100"
                               title="Edit deal"><Pencil className="size-4" />
+                          </Link>
+                           <button type="button" onClick={() => openQuoteDialog(d)} className="rounded border border-slate-200 bg-white px-3 py-2 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50" title="View associated quotes">
+                            <FileText className="size-4" />
+                          </button>
+                          <Link
+                              to={`/quotations/new/deal/${d.id}`}
+                              className="rounded border border-slate-200 bg-white px-3 py-2 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
+                              title="Create quote">
+                              <Plus className="size-4" />
                           </Link>
                           <button type="button" onClick={() => handleDelete(d.id, d.dealName)} className="rounded border border-red-200 bg-red-50 p-2 text-red-600 transition-all hover:bg-red-100" 
                           title="Delete deal"><Trash2 className="size-4" /></button>

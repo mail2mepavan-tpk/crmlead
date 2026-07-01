@@ -143,7 +143,7 @@ export default function DealForm() {
       primaryContactId: lead.leadContactId || prev.primaryContactId,
       leadId: lead.id || prev.leadId,
       salesPoc: lead.salesPoc || prev.salesPoc,
-      dealAmount: prev.dealAmount,
+      dealAmount: prev.dealAmount || lead.targetDealAmount,
       probability: stageProbability[lead.leadStatus] ?? prev.probability,
       description: lead.description || prev.description,
       dealSource: lead.leadSource || prev.dealSource,

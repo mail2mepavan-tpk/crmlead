@@ -243,10 +243,12 @@ export default function QuotationForm() {
 
   const calculateTotals = () => {
     const subTotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
-    const gstAmount = calculateGST(subTotal, formData.taxes.gstPercentage);
+    const gstAmount = Math.round(calculateGST(subTotal, formData.taxes.gstPercentage));
     const shippingCharges = formData.commercials.shippingCharges === 'At actuals' ? 0 : Number(formData.commercials.shippingCharges || 0);
     const grandTotal = calculateGrandTotal(subTotal, gstAmount, shippingCharges);
-    const amountInWords = numberToWords(Math.round(grandTotal));
+    const amountInWords = numberToWords(grandTotal);
+
+    //console.log('Calculated Totals:', { subTotal, gstAmount,shippingCharges, grandTotal, amountInWords });
 
     return {
       subTotal,
@@ -352,7 +354,7 @@ export default function QuotationForm() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Quotation Details */}
           <div className="rounded-lg bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-semibold text-slate-800">Quotation Details</h3>
+            <h3 className="mb-4 text-lg font-semibold text-slate-800">Quotation Details - Deal # {dealId}</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">

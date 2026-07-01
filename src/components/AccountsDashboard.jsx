@@ -66,12 +66,12 @@ export default function AccountsDashboard() {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return true;
     return [
-      account.companyName,
-      account.owner,
-      account.status,
-      account.city,
-      account.state,
-      account.country,
+      account.CompanyName,
+      account.Owner,
+      account.Status,
+      account.City,
+      account.State,
+      account.Country,
     ]
       .filter(Boolean)
       .some((field) => field.toLowerCase().includes(term));
@@ -203,54 +203,54 @@ export default function AccountsDashboard() {
                       className="border-b border-slate-100 transition-colors hover:bg-slate-50"
                     >
                       <td className="px-4 py-4">
-                        <div className="font-semibold text-slate-900">{account.companyName}</div>
+                        <div className="font-semibold text-slate-900">{account.CompanyName}</div>
                         <div className="mt-1 text-xs text-slate-500">
-                          {account.industry || 'Industry not set'}
+                          {account.Industry || 'Industry not set'}
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div>{account.city || '—'}, {account.state || '—'}</div>
-                        <div className="text-xs text-slate-500">{account.country || '—'}</div>
+                        <div>{account.City || '—'}, {account.State || '—'}</div>
+                        <div className="text-xs text-slate-500">{account.Country || '—'}</div>
                       </td>
-                      <td className="px-4 py-4 text-slate-700">{account.owner || '—'}</td>
+                      <td className="px-4 py-4 text-slate-700">{account.Owner || '—'}</td>
                       <td className="px-4 py-4">
                         <span
                           className={[
                             'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold uppercase',
-                            account.status === 'Active'
+                            account.Status === 'Active'
                               ? 'bg-emerald-100 text-emerald-800'
-                              : account.status === 'In-Active'
+                              : account.Status === 'In-Active'
                               ? 'bg-slate-100 text-slate-800'
-                              : account.status === 'Pending'
+                              : account.Status === 'Pending'
                               ? 'bg-amber-100 text-amber-800'
                               : 'bg-violet-100 text-violet-800',
                           ].join(' ')}
                         >
-                          {account.status || 'Unknown'}
+                          {account.Status || 'Unknown'}
                         </span>
                       </td>
                       <td className="px-4 py-4">
                         <span
                           className={[
                             'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold uppercase',
-                            account.health === 'Green'
+                            account.Health === 'Green'
                               ? 'bg-emerald-100 text-emerald-800'
-                              : account.health === 'Yellow'
+                              : account.h2ealth === 'Yellow'
                               ? 'bg-amber-100 text-amber-800'
                               : 'bg-red-100 text-red-800',
                           ].join(' ')}
                         >
-                          {account.health || 'N/A'}
+                          {account.Health || 'N/A'}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-slate-500">
-                        <div>{account.createdDate ? new Date(account.createdDate).toLocaleDateString() : '—'}</div>
-                        <div className="text-xs">{account.createdBy || 'System'}</div>
+                        <div>{account.CreatedDate ? new Date(account.CreatedDate).toLocaleDateString() : '—'}</div>
+                        <div className="text-xs">{account.CreatedBy || 'System'}</div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap items-center justify-center gap-2">
                           <Link
-                            to={`/accounts/${account.id}/edit`}
+                            to={`/accounts/${account.Id}/edit`}
                             className="rounded border border-slate-200 bg-white p-2 text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50"
                             title="Edit account"
                           >
@@ -258,7 +258,7 @@ export default function AccountsDashboard() {
                           </Link>
                           <button
                             type="button"
-                            onClick={() => handleDelete(account.id, account.companyName)}
+                            onClick={() => handleDelete(account.Id, account.companyName)}
                             className="rounded border border-red-200 bg-red-50 p-2 text-red-600 transition-all hover:bg-red-100"
                             title="Delete account"
                           >
