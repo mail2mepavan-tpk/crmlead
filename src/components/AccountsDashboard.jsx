@@ -258,7 +258,7 @@ export default function AccountsDashboard() {
                           </Link>
                           <button
                             type="button"
-                            onClick={() => handleDelete(account.Id, account.companyName)}
+                            onClick={() => handleDelete(account.Id, account.CompanyName)}
                             className="rounded border border-red-200 bg-red-50 p-2 text-red-600 transition-all hover:bg-red-100"
                             title="Delete account"
                           >

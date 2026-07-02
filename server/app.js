@@ -38,6 +38,7 @@ const TABLES = {
   leadSources: 'LeadSources',
   emailGroups: 'EmailGroups',
   quotations: 'Quotations',
+  products: 'Products',
 };
 
 let dbPool = null;
@@ -304,6 +305,10 @@ const readQuotations = readQuotes;
 const writeQuotations = async (data) => writeQuotes(data);
 const updateQuotations = (row) => writeUpdate(TABLES.quotations, row);
 const deleteQuotations = (id) => deleteTable(TABLES.quotations, 'QuoteId', id);
+const readProducts = () => readTable(TABLES.products);
+const writeProducts = (data) => writeTable(TABLES.products, data);
+const updateProducts = (row) => writeUpdate(TABLES.products, row);
+const deleteProducts = (id) => deleteTable(TABLES.products, 'id', id);
 const updateTable = writeUpdate;
 
 // Quotation storage now uses the database table `Quotations`.
@@ -366,6 +371,10 @@ if (AZURE_EMAIL_CONNECTION_STRING) {
 
 function matchId(record, id) {
   return String(record.id) === String(id);
+}
+
+function matchID(record, id) {
+  return String(record.Id) === String(id);
 }
 
 function sanitizeUser(user) {
@@ -924,9 +933,9 @@ function parseAccountBody(body) {
     pinZip: body.pinZip?.trim() || '',
     industry: body.industry?.trim() || '',
     website: body.website?.trim() || '',
-    phone: body.phone?.trim() || '',
-    employees: body.employees?.trim() || '',
-    annualRevenue: body.annualRevenue?.trim() || '',
+    phone: body.phone || '',
+    employees: body.employees || '',
+    annualRevenue: body.annualRevenue || '',
     region: body.region?.trim() || '',
     status: body.status || 'Active',
     health: body.health || 'Green',
@@ -1262,30 +1271,30 @@ function buildContactRecord(data, existing = {}) {
 function buildAccountRecord(data, existing = {}) {
   return {
     ...existing,
-    companyName: data.companyName,
-    address: data.address,
-    city: data.city,
-    state: data.state,
-    country: data.country,
-    pinZip: data.pinZip,
-    industry: data.industry,
-    website: data.website,
-    phone: data.phone,
-    employees: data.employees,
-    annualRevenue: data.annualRevenue,
-    region: data.region,
-    status: data.status,
-    health: data.health,
-    owner: data.owner,
-    startDate: data.startDate,
-    gstNumber: data.gstNumber,
-    description: data.description,
-    notes: data.notes,
-    tasks: data.tasks,
-    createdBy: data.createdBy,
-    createdDate: data.createdDate,
-    updatedBy: data.updatedBy,
-    updatedDate: data.updatedDate,
+    CompanyName: data.companyName,
+    Address: data.address,
+    City: data.city,
+    State: data.state,
+    Country: data.country,
+    PinZip: data.pinZip,
+    Industry: data.industry,
+    Website: data.website,
+    Phone: data.phone,
+    Employees: data.employees,
+    AnnualRevenue: data.annualRevenue,
+    Region: data.region,
+    Status: data.status,
+    Health: data.health,
+    Owner: data.owner,
+    StartDate: data.startDate,
+    GstNumber: data.gstNumber,
+    Description: data.description,
+    Notes: data.notes,
+    Tasks: data.tasks,
+    CreatedBy: data.createdBy,
+    CreatedDate: data.createdDate,
+    UpdatedBy: data.updatedBy,
+    UpdatedDate: data.updatedDate,
   };
 }
 
@@ -1498,7 +1507,7 @@ app.get('/api/accounts', requireAuth, async (_req, res) => {
 app.get('/api/accounts/:id', requireAuth, async (req, res) => {
   try {
     const accounts = await readAccounts();
-    const account = accounts.find((a) => matchId(a, req.params.id));
+    const account = accounts.find((a) => matchID(a, req.params.id));
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -1516,10 +1525,10 @@ app.post('/api/accounts', requireAuth, async (req, res) => {
     }
 
     const newAccount = {
-      id: Date.now(),
+      Id: Date.now(),
       ...buildAccountRecord(validation.data),
-      createdDate: new Date().toISOString(),
-      updatedDate: new Date().toISOString(),
+      CreatedDate: new Date().toISOString(),
+      UpdatedDate: new Date().toISOString(),
     };
     await updateAccounts(newAccount);
     res.status(201).json(newAccount);
@@ -1531,7 +1540,7 @@ app.post('/api/accounts', requireAuth, async (req, res) => {
 app.put('/api/accounts/:id', requireAuth, async (req, res) => {
   try {
     const accounts = await readAccounts();
-    const index = accounts.findIndex((a) => matchId(a, req.params.id));
+    const index = accounts.findIndex((a) => matchID(a, req.params.id));
     if (index === -1) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -1544,7 +1553,7 @@ app.put('/api/accounts/:id', requireAuth, async (req, res) => {
     const updated = {
       ...accounts[index],
       ...buildAccountRecord(validation.data, accounts[index]),
-      updatedDate: new Date().toISOString(),
+      UpdatedDate: new Date().toISOString(),
     };
     await updateAccounts(updated);
     res.json(updated);
@@ -1556,7 +1565,7 @@ app.put('/api/accounts/:id', requireAuth, async (req, res) => {
 app.delete('/api/accounts/:id', requireAuth, async (req, res) => {
   try {
     const accounts = await readAccounts();
-    const account = accounts.find((a) => matchId(a, req.params.id));
+    const account = accounts.find((a) => matchID(a, req.params.id));
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -1570,6 +1579,83 @@ app.delete('/api/accounts/:id', requireAuth, async (req, res) => {
 app.get('/api/contacts', requireAuth, async (_req, res) => {
   try {
     res.json(await readContacts());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/products', requireAuth, async (_req, res) => {
+  try {
+    res.json(await readProducts());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/products/:id', requireAuth, async (req, res) => {
+  try {
+    const products = await readProducts();
+    const product = products.find((p) => matchId(p, req.params.id));
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/products', requireAuth, async (req, res) => {
+  try {
+    const newProduct = {
+      id: Date.now(),
+      productCode: req.body?.productCode ?? '',
+      productName: req.body?.productName ?? '',
+      productDesciption: req.body?.productDesciption ?? '',
+      createdBy: req.body?.createdBy ?? 'System',
+      createdDate: new Date().toISOString(),
+      updatedBy: req.body?.updatedBy ?? 'System',
+      updatedDate: new Date().toISOString(),
+    };
+    await updateProducts(newProduct);
+    res.status(201).json(newProduct);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/products/:id', requireAuth, async (req, res) => {
+  try {
+    const products = await readProducts();
+    const index = products.findIndex((p) => matchId(p, req.params.id));
+    if (index === -1) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const updated = {
+      ...products[index],
+      productCode: req.body?.productCode ?? products[index].productCode ?? '',
+      productName: req.body?.productName ?? products[index].productName ?? '',
+      productDesciption: req.body?.productDesciption ?? products[index].productDesciption ?? '',
+      updatedBy: req.body?.updatedBy ?? 'System',
+      updatedDate: new Date().toISOString(),
+    };
+    await updateProducts(updated);
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/products/:id', requireAuth, async (req, res) => {
+  try {
+    const products = await readProducts();
+    const product = products.find((p) => matchId(p, req.params.id));
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    await deleteProducts(req.params.id);
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2293,20 +2379,22 @@ async function createQuotePDFBuffer(quote) {
       doc.on('error', reject);
 
       // HEADER SECTION
-      doc.fontSize(22).font('Helvetica-Bold').text(quote.company.name, 50, 40);
-      doc.fontSize(9).font('Helvetica').text(quote.company.address, 50, 68);
-      doc.fontSize(9).text(`Phone: ${quote.quotation.salesPerson.phone} | GSTIN: ${quote.company.gstin}`, 50, 82);
-      doc.fontSize(9).text(`CIN: ${quote.company.companyId}`, 50, 96);
+      doc.image('./src/assets/aaruni.png', 50, 30,{ width: 60, height: 30, align: 'right' });
+      doc.fontSize(12).font('Helvetica-Bold').text(quote.company.name, 120, 40);
+      doc.fontSize(9).font('Helvetica').text(quote.company.address, 50, 65);
+      doc.fontSize(9).text(`Phone: ${quote.quotation.salesPerson.phone} | GSTIN: ${quote.company.gstin}`, 50, 80);
+      doc.fontSize(9).text(`CIN: ${quote.company.companyId}`, 50, 95);
 
       // Quotation stamp
-      doc.fontSize(28).font('Helvetica-Bold').fillColor('#C0C0C0').text('QUOTATION', 380, 50, {
+      
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#C0C0C0').text('QUOTATION', 380, 40, {
         align: 'right',
-        opacity: 0.3,
+        opacity: 0.1,
       });
       doc.fillColor('black');
 
-       doc.moveDown(1);
-      doc.moveTo(50, 115).lineTo(550, 115).stroke();
+      doc.moveDown(1);
+      doc.moveTo(50, 110).lineTo(550, 110).stroke();
       doc.moveDown(0.5);
 
       // QUOTE INFO SECTION
@@ -2314,7 +2402,7 @@ async function createQuotePDFBuffer(quote) {
       const infoBoxRight = 310;
       const infoBoxWidth = 240;
       const infoBoxHeight = 55;
-      const infoBoxTop = doc.y;
+      const infoBoxTop = 120;
 
       // Left box - Quote Details
       doc.rect(infoBoxLeft, infoBoxTop, infoBoxWidth, infoBoxHeight).stroke();
@@ -2335,7 +2423,7 @@ async function createQuotePDFBuffer(quote) {
       doc.moveDown(1);
 
       // BILL TO AND SHIP TO SECTION
-      const addressBoxWidth = 230;
+      const addressBoxWidth = 240;
       const addressBoxHeight = 95;
       const addressBoxY = doc.y;
       const addressBoxLeft = 50;
@@ -2446,17 +2534,15 @@ async function createQuotePDFBuffer(quote) {
 
       // BANK DETAILS SECTION
       const bankBoxTop = doc.y;
-      doc.rect(50, bankBoxTop, 500, 65).stroke();
+      doc.rect(50, bankBoxTop, 500, 70).stroke();
       doc.fontSize(10).font('Helvetica-Bold').text('Bank Details for Payment', 58, bankBoxTop + 5);
       doc.fontSize(8).font('Helvetica');
       const col1Bank = 58,
         col2Bank = 280;
       doc.text(`Account Name: ${quote.bankDetails.accountName}`, col1Bank, bankBoxTop + 20);
-      doc.text(`Bank Name: ${quote.bankDetails.bankName}`, col2Bank, bankBoxTop + 20);
-      doc.text(`Account Number: ${quote.bankDetails.accountNumber}`, col1Bank, bankBoxTop + 33);
-      doc.text(`Branch: ${quote.bankDetails.branchAddress}`, col2Bank, bankBoxTop + 33);
-      doc.text(`GSTIN: ${quote.company.gstin}`, col1Bank, bankBoxTop + 46);
-      doc.text(`CIN: ${quote.company.companyId}`, col2Bank, bankBoxTop + 46);
+      doc.text(`Account Number: ${quote.bankDetails.accountNumber} | Bank Name: ${quote.bankDetails.bankName}`, col1Bank, bankBoxTop + 33);
+      doc.text(`GSTIN: ${quote.company.gstin} | CIN: ${quote.company.companyId}`, col1Bank, bankBoxTop + 46);
+      doc.text(`Branch: ${quote.bankDetails.branchAddress}`, col1Bank, bankBoxTop + 59);
 
       doc.moveDown(2);
 

@@ -13,6 +13,7 @@ import {
   Briefcase,
   FileText,
   ArrowUpRight,
+  Package,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -101,6 +102,12 @@ export default function Sidebar({ isOpen, onClose }) {
               onClose={onClose}
               icon={Building2}
               label="Accounts"
+            />
+            <NavItem
+              to="/products"
+              onClose={onClose}
+              icon={Package}
+              label="Products"
             />
             <NavItem
               to="/contacts"

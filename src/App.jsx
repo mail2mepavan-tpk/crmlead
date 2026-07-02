@@ -21,6 +21,8 @@ import DealForm from './components/DealForm';
 import QuotationsDashboard from './components/QuotationsDashboard';
 import QuotationForm from './components/QuotationForm';
 import RevenueDashboard from './components/RevenueDashboard';
+import ProductsDashboard from './components/ProductsDashboard';
+import ProductForm from './components/ProductForm';
 import LoginPage from './components/LoginPage';
 import {
   PublicRoute,
@@ -53,6 +55,9 @@ export default function EnquiryManagementSystem() {
             <Route path="/deals" element={<DealsDashboard />} />
             <Route path="/deals/new" element={<DealForm />} />
             <Route path="/deals/:id/edit" element={<DealForm />} />
+            <Route path="/products" element={<ProductsDashboard />} />
+            <Route path="/products/new" element={<ProductForm />} />
+            <Route path="/products/:id/edit" element={<ProductForm />} />
             <Route path="/profile" element={<UserForm />} />
 
             <Route element={<AdminRoute />}>

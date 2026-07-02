@@ -11,6 +11,7 @@ import {
   numberToWords,
 } from '../utils/quoteStorage';
 import { getDealById } from '../utils/dealStorage';
+import { getProducts } from '../utils/productStorage';
 import { useAuth } from '../context/AuthContext';
 
 const fieldClass = (hasError) =>
@@ -31,13 +32,13 @@ const emptyQuote = () => ({
     replyTo: '',
   },
   company: {
-    name: '',
-    companyId: '',
-    gstin: '',
-    address: '',
+    name: 'Aaruni Lifesciences Private Limited',
+    companyId: 'U74999KA2021PTC146762',
+    gstin: '29AAVCA1290J1Z4',
+    address: 'V-29, 9th Main Road, 2nd Stage, Peenya Industrial Area, Bangalore, Karnataka - 560058',
   },
   quotation: {
-    quoteNumber: '',
+    quoteNumber: 'ALS/26-27/' + Math.random().toString(36).substr(2, 4).toUpperCase() + '/HW',
     quoteType: 'Initial',
     quotationDate: new Date().toISOString().split('T')[0],
     expiryDate: '',
@@ -77,10 +78,10 @@ const emptyQuote = () => ({
     amountInWords: '',
   },
   bankDetails: {
-    accountName: '',
-    bankName: '',
-    accountNumber: '',
-    branchAddress: '',
+    accountName: 'AARUNI LIFESCIENCES SOLUTIONS PRIVATE LIMITED',
+    bankName: 'IDFC FIRST BANK',
+    accountNumber: '10073636071',
+    branchAddress: 'Ground Floor, Trinity Complex Kalyan Nagar ORR, Bangalore 560043',
   },
   signature: {
     authorizedPerson: '',
@@ -91,6 +92,8 @@ const emptyQuote = () => ({
 const emptyItem = () => ({
   lineNumber: 1,
   itemCode: '',
+  productCode: '',
+  productName: '',
   description: '',
   quantity: 1,
   unitPrice: 0,
@@ -113,6 +116,18 @@ export default function QuotationForm() {
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await getProducts();
+        setProducts(Array.isArray(data) ? data : []);
+      } catch {
+        setProducts([]);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (!isEditing) return;
@@ -222,13 +237,26 @@ export default function QuotationForm() {
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...items];
     updatedItems[index][field] = field === 'quantity' || field === 'unitPrice' || field === 'discountPercent' ? Number(value) : value;
-    
-    // Recalculate line totals
+
+    if (field === 'productCode') {
+      const selectedProduct = products.find((product) => product.productCode === value);
+      updatedItems[index].itemCode = selectedProduct?.productCode || '';
+      updatedItems[index].description = selectedProduct?.productName || '';
+      updatedItems[index].productName = selectedProduct?.productName || '';
+    }
+
+    if (field === 'productName') {
+      const selectedProduct = products.find((product) => product.productName === value);
+      updatedItems[index].itemCode = selectedProduct?.productCode || '';
+      updatedItems[index].description = selectedProduct?.productName || '';
+      updatedItems[index].productCode = selectedProduct?.productCode || '';
+    }
+
     const item = updatedItems[index];
     item.discountAmount = (item.unitPrice * item.quantity * item.discountPercent) / 100;
     item.priceAfterDiscount = item.quantity * item.unitPrice - item.discountAmount;
     item.lineTotal = item.priceAfterDiscount;
-    
+
     setItems(updatedItems);
   };
 
@@ -663,8 +691,8 @@ export default function QuotationForm() {
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
                     <th className="px-4 py-3 text-left font-semibold text-slate-700">#</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700">Item Code</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-700">Description</th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-700">Product Code</th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-700">Product Name</th>
                     <th className="px-4 py-3 text-center font-semibold text-slate-700">Qty</th>
                     <th className="px-4 py-3 text-right font-semibold text-slate-700">Unit Price</th>
                     <th className="px-4 py-3 text-center font-semibold text-slate-700">Discount %</th>
@@ -677,22 +705,32 @@ export default function QuotationForm() {
                     <tr key={index} className="border-b border-slate-200">
                       <td className="px-4 py-3">{item.lineNumber}</td>
                       <td className="px-4 py-3">
-                        <input
-                          type="text"
-                          value={item.itemCode}
-                          onChange={(e) => handleItemChange(index, 'itemCode', e.target.value)}
+                        <select
+                          value={item.productCode}
+                          onChange={(e) => handleItemChange(index, 'productCode', e.target.value)}
                           className="w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none"
-                          placeholder="Code"
-                        />
+                        >
+                          <option value="">Select code</option>
+                          {products.map((product) => (
+                            <option key={product.id} value={product.productCode}>
+                              {product.productCode}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-4 py-3">
-                        <input
-                          type="text"
-                          value={item.description}
-                          onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                        <select
+                          value={item.productName}
+                          onChange={(e) => handleItemChange(index, 'productName', e.target.value)}
                           className="w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none"
-                          placeholder="Description"
-                        />
+                        >
+                          <option value="">Select product</option>
+                          {products.map((product) => (
+                            <option key={product.id} value={product.productName}>
+                              {product.productName}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td className="px-4 py-3">
                         <input
@@ -877,7 +915,7 @@ export default function QuotationForm() {
                   }
                   className={fieldClass(false)}
                   placeholder="Bank name"
-                />
+               />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
