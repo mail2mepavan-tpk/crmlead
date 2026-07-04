@@ -448,6 +448,9 @@ ${lead.leadRegion}
 Lead Source:
 ${lead.leadSource}
 
+Opportunity Tasks:
+${lead.tasks || 'No tasks provided.'}
+
 Opportunity Description:
 ${lead.description}
 
@@ -525,6 +528,11 @@ Log in to your CRM dashboard to view full details and take action.`;
                     <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Status</p>
                     <p style="margin: 8px 0 0 0; color: #27ae60; font-size: 15px; font-weight: 600;">${lead.leadStatus || 'New'}</p>
                 </div>
+            </div>
+
+             <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 25px;">
+                <p style="margin: 0; color: #7f8c8d; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px;">Tasks</p>
+                <p style="margin: 0; color: #2c3e50; font-size: 14px; line-height: 1.6;">${lead.tasks}</p>
             </div>
 
             <!-- Description Section -->

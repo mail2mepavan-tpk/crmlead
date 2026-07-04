@@ -11,6 +11,8 @@ import { getContacts } from '../utils/contactStorage';
 import { getAccounts } from '../utils/accountStorage';
 import { getSalesRegions } from '../utils/salesRegionStorage';
 import { getLeadSources } from '../utils/leadSourceStorage';
+import { getUsers } from '../utils/userStorage';
+import { getProducts } from '../utils/productStorage';
 
 const fieldClass = (hasError) =>
   [
@@ -79,23 +81,31 @@ export default function SalesLeadForm() {
   const [accounts, setAccounts] = useState([]);
   const [regions, setRegions] = useState([]);
   const [sources, setSources] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [products, setProducts] = useState([]);
   const [contactFilter, setContactFilter] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
+  const [mentionPrefix, setMentionPrefix] = useState('');
+  const [mentionTarget, setMentionTarget] = useState(null);
 
   useEffect(() => {
     const loadOptions = async () => {
       try {
-        const [loadedContacts, loadedAccounts, loadedRegions, loadedSources] =
+        const [loadedContacts, loadedAccounts, loadedRegions, loadedSources, loadedUsers, loadedProducts] =
           await Promise.all([
             getContacts(),
             getAccounts(),
             getSalesRegions(),
             getLeadSources(),
+            getUsers(),
+            getProducts(),
           ]);
         setContacts(loadedContacts);
         setAccounts(loadedAccounts);
         setRegions(loadedRegions);
         setSources(loadedSources);
+        setUsers(Array.isArray(loadedUsers) ? loadedUsers : []);
+        setProducts(Array.isArray(loadedProducts) ? loadedProducts : []);
       } catch (err) {
         setLoadError(err.message || 'Failed to load lookup data');
       } finally {
@@ -176,6 +186,51 @@ export default function SalesLeadForm() {
       .some((value) => value.toLowerCase().includes(search));
   });
 
+  const handleMentionInput = (event, fieldName) => {
+    const { value } = event.target;
+    const cursor = event.target.selectionStart || value.length;
+    const textBeforeCursor = value.slice(0, cursor);
+    const match = textBeforeCursor.match(/@([\w.-]*)$/);
+
+    if (match) {
+      setMentionPrefix(match[1]);
+      setMentionTarget(fieldName);
+    } else {
+      setMentionPrefix('');
+      setMentionTarget(null);
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      [fieldName]: value,
+    }));
+  };
+
+  const insertMention = (username) => {
+    if (!mentionTarget) return;
+
+    const currentValue = formData[mentionTarget] || '';
+    const cursor = currentValue.length;
+    const textBeforeCursor = currentValue.slice(0, cursor);
+    const match = textBeforeCursor.match(/@([\w.-]*)$/);
+
+    if (!match) {
+      setFormData((prev) => ({
+        ...prev,
+        [mentionTarget]: `${currentValue}${username} `,
+      }));
+      return;
+    }
+
+    const updatedValue = currentValue.replace(/@([\w.-]*)$/, `@${username} `);
+    setFormData((prev) => ({
+      ...prev,
+      [mentionTarget]: updatedValue,
+    }));
+    setMentionPrefix('');
+    setMentionTarget(null);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -208,6 +263,11 @@ export default function SalesLeadForm() {
       }));
     }
   };
+
+  const mentionOptions = users
+    .map((user) => user.username || user.email || user.fullName)
+    .filter(Boolean)
+    .filter((username) => username.toLowerCase().includes(mentionPrefix.toLowerCase()));
 
   const validateForm = () => {
     const newErrors = {};
@@ -559,7 +619,7 @@ export default function SalesLeadForm() {
                       list="accounts-list"
                       value={formData.companyName}
                       onChange={handleChange}
-                      className={fieldClass(errors.companyName)}
+                      className={fieldClass(false)}
                       placeholder="Search or type company name"
                     />
                     <Link
@@ -627,16 +687,27 @@ export default function SalesLeadForm() {
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
                     <label htmlFor="productType" className="text-sm font-semibold text-slate-800">
-                      Product Type *
+                      Product *
                     </label>
-                    <input
+                    <select
                       id="productType"
                       name="productType"
                       value={formData.productType}
                       onChange={handleChange}
                       className={fieldClass(errors.productType)}
-                      placeholder="Product category or service"
-                    />
+                    >
+                      <option value="">Select a product</option>
+                      {products.map((product) => {
+                        const label = product.productName || product.name || product.productCode || 'Unnamed product';
+                        const value = product.productName || product.name || product.productCode || '';
+                        return (
+                          <option key={product.id} value={value}>
+                            {label}
+                            {product.productName ? ` (${product.productName})` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
                     {errors.productType && (
                       <span className="text-xs font-medium text-red-500">
                         {errors.productType}
@@ -687,11 +758,25 @@ export default function SalesLeadForm() {
                     id="tasks"
                     name="tasks"
                     value={formData.tasks}
-                    onChange={handleChange}
+                    onChange={(event) => handleMentionInput(event, 'tasks')}
                     className={fieldClass(false)}
                     rows="4"
-                    placeholder="Task list or next steps"
+                    placeholder="Task list or next steps. Type @ to assign a user"
                   />
+                  {mentionTarget === 'tasks' && mentionOptions.length > 0 && (
+                    <div className="rounded border border-slate-200 bg-white p-2 text-sm shadow-sm">
+                      {mentionOptions.map((username) => (
+                        <button
+                          key={username}
+                          type="button"
+                          onClick={() => insertMention(username)}
+                          className="block w-full rounded px-2 py-1 text-left text-slate-700 hover:bg-slate-100"
+                        >
+                          @{username}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -702,11 +787,25 @@ export default function SalesLeadForm() {
                     id="activities"
                     name="activities"
                     value={formData.activities}
-                    onChange={handleChange}
+                    onChange={(event) => handleMentionInput(event, 'activities')}
                     className={fieldClass(false)}
                     rows="4"
-                    placeholder="Notes about calls, emails, meetings"
+                    placeholder="Notes about calls, emails, meetings. Type @ to mention a user"
                   />
+                  {mentionTarget === 'activities' && mentionOptions.length > 0 && (
+                    <div className="rounded border border-slate-200 bg-white p-2 text-sm shadow-sm">
+                      {mentionOptions.map((username) => (
+                        <button
+                          key={username}
+                          type="button"
+                          onClick={() => insertMention(username)}
+                          className="block w-full rounded px-2 py-1 text-left text-slate-700 hover:bg-slate-100"
+                        >
+                          @{username}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
