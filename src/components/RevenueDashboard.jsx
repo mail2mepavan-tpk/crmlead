@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Loader2, TrendingUp, ArrowUpRight, ArrowDownRight, Users, Building2, Contact, Package2 } from 'lucide-react';
 import { getQuotes } from '../utils/quoteStorage';
+import { getSalesLeads } from '../utils/salesLeadStorage';
+import { getAccounts } from '../utils/accountStorage';
+import { getContacts } from '../utils/contactStorage';
+import { getProducts } from '../utils/productStorage';
 import { useAuth } from '../context/AuthContext';
 
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -19,6 +23,10 @@ const statusStyles = {
 export default function RevenueDashboard() {
   const { isAdmin } = useAuth();
   const [quotes, setQuotes] = useState([]);
+  const [salesLeads, setSalesLeads] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [products, setProducts] = useState([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
@@ -26,27 +34,73 @@ export default function RevenueDashboard() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    loadQuotes();
+    loadDashboardData();
   }, [isAdmin]);
 
-  const loadQuotes = async () => {
+  const loadDashboardData = async () => {
     try {
       setLoading(true);
       setError('');
-      const data = await getQuotes();
-      setQuotes(data);
+
+      const [quotesResult, leadsResult, accountsResult, contactsResult, productsResult] = await Promise.allSettled([
+        getQuotes(),
+        getSalesLeads(),
+        getAccounts(),
+        getContacts(),
+        getProducts(),
+      ]);
+
+      setQuotes(quotesResult.status === 'fulfilled' ? quotesResult.value : []);
+      setSalesLeads(leadsResult.status === 'fulfilled' ? leadsResult.value : []);
+      setAccounts(accountsResult.status === 'fulfilled' ? accountsResult.value : []);
+      setContacts(contactsResult.status === 'fulfilled' ? contactsResult.value : []);
+      setProducts(productsResult.status === 'fulfilled' ? productsResult.value : []);
+
+      if ([quotesResult, leadsResult, accountsResult, contactsResult, productsResult].some((result) => result.status === 'rejected')) {
+        setError('Some dashboard data could not be loaded');
+      }
     } catch (err) {
-      setError(err.message || 'Unable to load quotation data');
+      setError(err.message || 'Unable to load dashboard data');
       setQuotes([]);
+      setSalesLeads([]);
+      setAccounts([]);
+      setContacts([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getRecordDate = (item) => {
+    const candidates = ['createdDate', 'createdAt', 'created', 'startDate', 'receivedDate', 'updatedDate'];
+    for (const key of candidates) {
+      const value = item?.[key];
+      if (!value) continue;
+      const date = new Date(value);
+      if (!Number.isNaN(date.getTime())) return date;
+    }
+    return null;
   };
 
   const getQuoteCreatedDate = (quote) => {
     if (quote?.createdAt) return new Date(quote.createdAt);
     if (quote?.quotation?.quotationDate) return new Date(quote.quotation.quotationDate);
     return null;
+  };
+
+  const filterByDateRange = (items) => {
+    if (!startDate && !endDate) return items;
+
+    const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+    const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
+
+    return items.filter((item) => {
+      const createdDate = getRecordDate(item);
+      if (!createdDate) return false;
+      if (start && createdDate < start) return false;
+      if (end && createdDate > end) return false;
+      return true;
+    });
   };
 
   const filteredQuotes = useMemo(() => {
@@ -63,6 +117,63 @@ export default function RevenueDashboard() {
       return true;
     });
   }, [quotes, startDate, endDate]);
+
+  const filteredLeads = useMemo(() => filterByDateRange(salesLeads), [salesLeads, startDate, endDate]);
+  const filteredAccounts = useMemo(() => filterByDateRange(accounts), [accounts, startDate, endDate]);
+  const filteredContacts = useMemo(() => filterByDateRange(contacts), [contacts, startDate, endDate]);
+  const filteredProducts = useMemo(() => filterByDateRange(products), [products, startDate, endDate]);
+
+  const counts = useMemo(() => ({
+    leads: filteredLeads.length,
+    accounts: filteredAccounts.length,
+    contacts: filteredContacts.length,
+    products: filteredProducts.length,
+  }), [filteredLeads, filteredAccounts, filteredContacts, filteredProducts]);
+
+  const leadStats = useMemo(() => {
+    const statusCounts = filteredLeads.reduce((acc, lead) => {
+      const status = lead.leadStatus || 'Unknown';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const regionCounts = filteredLeads.reduce((acc, lead) => {
+      const region = lead.leadRegion || 'Unknown';
+      acc[region] = (acc[region] || 0) + 1;
+      return acc;
+    }, {});
+
+    const sourceCounts = filteredLeads.reduce((acc, lead) => {
+      const source = lead.leadSource || 'Unknown';
+      acc[source] = (acc[source] || 0) + 1;
+      return acc;
+    }, {});
+
+    const productTypeCounts = filteredLeads.reduce((acc, lead) => {
+      const productType = lead.productType || 'Unknown';
+      acc[productType] = (acc[productType] || 0) + 1;
+      return acc;
+    }, {});
+
+    const dealAmounts = filteredLeads
+      .map((lead) => Number(lead.targetDealAmount) || 0)
+      .filter((amount) => amount > 0);
+
+    const totalDealAmount = dealAmounts.reduce((sum, amount) => sum + amount, 0);
+    const averageDealAmount = dealAmounts.length ? totalDealAmount / dealAmounts.length : 0;
+    const highestDealAmount = dealAmounts.length ? Math.max(...dealAmounts) : 0;
+
+    return {
+      statusCounts,
+      regionCounts,
+      sourceCounts,
+      productTypeCounts,
+      totalDealAmount,
+      averageDealAmount,
+      highestDealAmount,
+      dealAmountCount: dealAmounts.length,
+    };
+  }, [filteredLeads]);
 
   const stats = useMemo(() => {
     const revenueByStatus = {
@@ -159,9 +270,9 @@ export default function RevenueDashboard() {
               <TrendingUp className="size-4" />
               Revenue Analytics
             </div>
-            <h1 className="mt-4 text-3xl font-semibold text-slate-900">Quotation Revenue Dashboard</h1>
+            <h1 className="mt-4 text-3xl font-semibold text-slate-900">Sales Dashboard</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Executive overview of quotation revenue, status performance, and top opportunities across your CRM pipeline.
+              Monitor and analyze sales performance, revenue trends, and key metrics across leads, accounts, contacts, and products.
             </p>
           </div>
           <div className="grid gap-3 rounded-3xl bg-white px-6 py-5 shadow-sm ring-1 ring-slate-200 sm:grid-cols-[1fr_1fr_auto]">
@@ -210,6 +321,105 @@ export default function RevenueDashboard() {
               <div>
                 <p className="text-3xl font-semibold text-slate-900">{stats.quoteCount}</p>
                 <p className="text-sm text-slate-500">Quotations</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: 'New Leads', value: counts.leads, icon: Users, accent: 'text-sky-700 bg-sky-50' },
+            { label: 'New Accounts', value: counts.accounts, icon: Building2, accent: 'text-emerald-700 bg-emerald-50' },
+            { label: 'New Contacts', value: counts.contacts, icon: Contact, accent: 'text-violet-700 bg-violet-50' },
+            { label: 'New Products', value: counts.products, icon: Package2, accent: 'text-amber-700 bg-amber-50' },
+          ].map((tile) => {
+            const Icon = tile.icon;
+            return (
+              <div key={tile.label} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <div className={`inline-flex rounded-2xl p-3 ${tile.accent}`}>
+                  <Icon className="size-5" />
+                </div>
+                <p className="mt-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">{tile.label}</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-900">{tile.value}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm uppercase tracking-[0.18em] text-slate-500"><b>Lead</b> Insights</p>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 xl:grid-cols-5">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status</p>
+              <div className="mt-3 space-y-2">
+                {Object.entries(leadStats.statusCounts).slice(0, 4).map(([status, count]) => (
+                  <div key={status} className="flex items-center justify-between text-sm text-slate-700">
+                    <span>{status}</span>
+                    <span className="font-semibold">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sales Region</p>
+              <div className="mt-3 space-y-2">
+                {Object.entries(leadStats.regionCounts).slice(0, 4).map(([region, count]) => (
+                  <div key={region} className="flex items-center justify-between text-sm text-slate-700">
+                    <span>{region}</span>
+                    <span className="font-semibold">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Deal Amount</p>
+              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <div className="flex items-center justify-between">
+                  <span>Total</span>
+                  <span className="font-semibold">{currencyFormatter.format(leadStats.totalDealAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Average</span>
+                  <span className="font-semibold">{currencyFormatter.format(leadStats.averageDealAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Highest</span>
+                  <span className="font-semibold">{currencyFormatter.format(leadStats.highestDealAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Leads with amount</span>
+                  <span className="font-semibold">{leadStats.dealAmountCount}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Lead Source</p>
+              <div className="mt-3 space-y-2">
+                {Object.entries(leadStats.sourceCounts).slice(0, 4).map(([source, count]) => (
+                  <div key={source} className="flex items-center justify-between text-sm text-slate-700">
+                    <span>{source}</span>
+                    <span className="font-semibold">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Product Type</p>
+              <div className="mt-3 space-y-2">
+                {Object.entries(leadStats.productTypeCounts).slice(0, 4).map(([productType, count]) => (
+                  <div key={productType} className="flex items-center justify-between text-sm text-slate-700">
+                    <span>{productType}</span>
+                    <span className="font-semibold">{count}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

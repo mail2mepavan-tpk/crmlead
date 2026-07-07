@@ -95,7 +95,7 @@ export default function Sidebar({ isOpen, onClose }) {
               to="/deals"
               onClose={onClose}
               icon={Briefcase}
-              label="Deals"
+              label="Opportunities"
             />
             <NavItem
               to="/accounts"

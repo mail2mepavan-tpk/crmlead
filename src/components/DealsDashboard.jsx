@@ -9,6 +9,7 @@ export default function DealsDashboard() {
   const [summary, setSummary] = useState({ total: 0 });
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const [quoteDialog, setQuoteDialog] = useState({
     open: false,
     deal: null,
@@ -21,12 +22,17 @@ export default function DealsDashboard() {
     loadDeals();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const loadDeals = async () => {
     try {
       setLoading(true);
       const data = await getDeals();
       setDeals(data);
       setSummary(getDealsSummary(data));
+      setCurrentPage(1);
     } catch (err) {
       setDeals([]);
       setSummary({ total: 0 });
@@ -75,6 +81,16 @@ export default function DealsDashboard() {
     setQuoteDialog({ open: false, deal: null, quotes: [], loading: false, error: '' });
   };
 
+  const stageChartData = Object.entries(
+    deals.reduce((acc, deal) => {
+      const stage = deal.dealStage || 'New';
+      acc[stage] = (acc[stage] || 0) + 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1]);
+
+  const maxStageCount = Math.max(1, ...stageChartData.map(([, count]) => count));
+
   const filtered = deals.filter((d) => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return true;
@@ -82,6 +98,12 @@ export default function DealsDashboard() {
       .filter(Boolean)
       .some((v) => v.toLowerCase().includes(term));
   });
+
+  const itemsPerPage = 5;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * itemsPerPage;
+  const paginatedDeals = filtered.slice(startIndex, startIndex + itemsPerPage);
 
   if (loading) {
     return (
@@ -96,12 +118,11 @@ export default function DealsDashboard() {
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-800">Deals</h2>
-            <p className="mt-1 text-sm text-slate-500">Manage deals stored in data/deals.json.</p>
+            <h2 className="text-2xl font-semibold text-slate-800">Opportunities</h2>
           </div>
           <Link to="/deals/new" className="inline-flex items-center gap-2 rounded bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white no-underline hover:bg-sky-600">
             <Plus className="size-4" />
-            New Deal
+            New Opportunity
           </Link>
         </div>
 
@@ -109,16 +130,44 @@ export default function DealsDashboard() {
           <div className="flex items-center gap-4 rounded-lg bg-white p-5 shadow-sm">
             <Layers className="size-10 shrink-0 text-brand" />
             <div>
-              <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Total Deals</p>
+              <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Total Opportunities</p>
               <p className="mt-2 text-3xl font-bold text-slate-800">{summary.total}</p>
             </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-5 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Opportunities Stage Distribution</h3>
+              </div>
+            </div>
+            {stageChartData.length === 0 ? (
+              <p className="text-sm text-slate-500">No opportunity data available yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {stageChartData.map(([stage, count]) => {
+                  const width = `${Math.max(8, (count / maxStageCount) * 100)}%`;
+                  return (
+                    <div key={stage} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm text-slate-700">
+                        <span className="font-medium">{stage}</span>
+                        <span>{count}</span>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-slate-100">
+                        <div className="h-2.5 rounded-full bg-sky-500" style={{ width }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="rounded-lg bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <Search className="size-4 text-slate-400" />
-            <input type="text" placeholder="Search deals by name, account, contact, stage..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-transparent text-sm text-slate-800 outline-none" />
+            <input type="text" placeholder="Search opportunities by name, account, contact, stage..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-transparent text-sm text-slate-800 outline-none" />
           </div>
         </div>
 
@@ -126,7 +175,7 @@ export default function DealsDashboard() {
           {filtered.length === 0 ? (
             <div className="px-5 py-16 text-center">
               <Inbox className="mx-auto mb-5 size-16 text-slate-400" />
-              <p className="mb-5 text-slate-500">{deals.length === 0 ? 'No deals yet. Create the first deal.' : 'No deals match your search.'}</p>
+              <p className="mb-5 text-slate-500">{deals.length === 0 ? 'No opportunities yet. Create the first opportunity.' : 'No opportunities match your search.'}</p>
               {deals.length === 0 && (
                 <Link to="/deals/new" className="inline-block rounded bg-sky-500 px-5 py-2.5 font-semibold text-white no-underline hover:bg-sky-600">Add First Deal</Link>
               )}
@@ -136,7 +185,7 @@ export default function DealsDashboard() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b-2 border-slate-100 bg-surface text-left uppercase text-[11px] tracking-[0.18em] text-slate-500">
-                    <th className="px-4 py-4">Deal</th>
+                    <th className="px-4 py-4">Opportunity</th>
                     <th className="px-4 py-4">Account</th>
                     <th className="px-4 py-4">Amount</th>
                     <th className="px-4 py-4">Stage</th>
@@ -145,7 +194,7 @@ export default function DealsDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((d) => 
+                  {paginatedDeals.map((d) => 
                   ( d.dealStage?.toLowerCase() === 'won' ? 
                   (
                   <tr key={d.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50 bg-green-50">
@@ -202,6 +251,34 @@ export default function DealsDashboard() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {filtered.length > itemsPerPage && (
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-600">
+                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length} opportunities
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safePage === 1}
+                  className="rounded border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-slate-600">
+                  Page {safePage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safePage === totalPages}
+                  className="rounded border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>

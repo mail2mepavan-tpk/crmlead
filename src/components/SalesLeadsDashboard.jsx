@@ -21,10 +21,15 @@ export default function SalesLeadsDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     loadLeads();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const loadLeads = async () => {
     try {
@@ -33,6 +38,7 @@ export default function SalesLeadsDashboard() {
       const data = await getSalesLeads();
       setLeads(data);
       setSummary(getSalesLeadsSummary(data));
+      setCurrentPage(1);
     } catch (err) {
       setError(err.message || 'Failed to load sales leads');
       setLeads([]);
@@ -72,6 +78,21 @@ export default function SalesLeadsDashboard() {
       .some((value) => value.toLowerCase().includes(term));
   });
 
+  const statusChartData = Object.entries(
+    filteredLeads.reduce((acc, lead) => {
+      const status = lead.leadStatus || 'New';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1]);
+
+  const maxStatusCount = Math.max(1, ...statusChartData.map(([, count]) => count));
+  const itemsPerPage = 5;
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * itemsPerPage;
+  const paginatedLeads = filteredLeads.slice(startIndex, startIndex + itemsPerPage);
+
   if (loading) {
     return (
       <div className="flex min-h-full items-center justify-center bg-surface">
@@ -110,6 +131,33 @@ export default function SalesLeadsDashboard() {
                 {summary.total}
               </p>
             </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-5 shadow-sm">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">Lead Status Statistics</h3>
+              <p className="text-sm text-slate-500">Distribution of current lead statuses.</p>
+            </div>
+            {statusChartData.length === 0 ? (
+              <p className="text-sm text-slate-500">No lead data available yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {statusChartData.map(([status, count]) => {
+                  const width = `${Math.max(8, (count / maxStatusCount) * 100)}%`;
+                  return (
+                    <div key={status} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm text-slate-700">
+                        <span className="font-medium">{status}</span>
+                        <span>{count}</span>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-slate-100">
+                        <div className="h-2.5 rounded-full bg-sky-500" style={{ width }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -161,7 +209,7 @@ export default function SalesLeadsDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredLeads.map((lead) => (
+                  {paginatedLeads.map((lead) => (
                     <tr key={lead.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50">
                       <td className="px-4 py-4 font-semibold text-slate-900">{lead.title}</td>
                       <td className="px-4 py-4 text-slate-700">{lead.companyName || '—'}</td>
@@ -198,6 +246,34 @@ export default function SalesLeadsDashboard() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {filteredLeads.length > itemsPerPage && (
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-600">
+                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredLeads.length)} of {filteredLeads.length} leads
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safePage === 1}
+                  className="rounded border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-slate-600">
+                  Page {safePage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safePage === totalPages}
+                  className="rounded border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -451,7 +451,7 @@ export default function SalesLeadForm() {
                   </div>
                   <div className="flex flex-col gap-2">
                     <label htmlFor="salesPoc" className="text-sm font-semibold text-slate-800">
-                      Sales POC *
+                    Internal Sales POC *
                     </label>
                     <input
                       id="salesPoc"
@@ -697,7 +697,10 @@ export default function SalesLeadForm() {
                       className={fieldClass(errors.productType)}
                     >
                       <option value="">Select a product</option>
-                      {products.map((product) => {
+                      <option value="Hardware">Hardware</option>
+                      <option value="Consumables">Consumables</option>
+                      <option value="Project">Project</option>
+                      {/* {products.map((product) => {
                         const label = product.productName || product.name || product.productCode || 'Unnamed product';
                         const value = product.productName || product.name || product.productCode || '';
                         return (
@@ -706,7 +709,7 @@ export default function SalesLeadForm() {
                             {product.productName ? ` (${product.productName})` : ''}
                           </option>
                         );
-                      })}
+                      })} */}
                     </select>
                     {errors.productType && (
                       <span className="text-xs font-medium text-red-500">
@@ -716,7 +719,7 @@ export default function SalesLeadForm() {
                   </div>
                   <div className="flex flex-col gap-2">
                     <label htmlFor="targetDealAmount" className="text-sm font-semibold text-slate-800">
-                      Target Deal Amount
+                      Target Opportunity Amount
                     </label>
                     <input
                       id="targetDealAmount"

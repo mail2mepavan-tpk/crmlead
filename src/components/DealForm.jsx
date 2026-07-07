@@ -186,7 +186,7 @@ export default function DealForm() {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.dealName.trim()) newErrors.dealName = 'Deal name is required';
+    if (!formData.dealName.trim()) newErrors.dealName = 'Opportunity name is required';
     if (!formData.account.trim()) newErrors.account = 'Account is required';
     if (!formData.salesPoc?.trim()) newErrors.salesPoc = 'Sales POC is required';
     return newErrors;
@@ -230,7 +230,7 @@ export default function DealForm() {
   }
 
   if (loadError) {
-    return (<div className="flex min-h-full flex-col items-center justify-center gap-4 bg-surface px-4"><p className="text-slate-600">{loadError}</p><button type="button" onClick={() => navigate('/deals')} className="rounded bg-sky-500 px-5 py-2.5 font-semibold text-white hover:bg-sky-600">Back to Deals</button></div>);
+    return (<div className="flex min-h-full flex-col items-center justify-center gap-4 bg-surface px-4"><p className="text-slate-600">{loadError}</p><button type="button" onClick={() => navigate('/deals')} className="rounded bg-sky-500 px-5 py-2.5 font-semibold text-white hover:bg-sky-600">Back to Opportunities</button></div>);
   }
 
   return (
@@ -238,11 +238,11 @@ export default function DealForm() {
       <div className="mx-auto max-w-5xl rounded-lg bg-white p-6 shadow-sm sm:p-10">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-800">{isEditing ? 'Edit Deal' : 'Create New Deal'}</h2>
-            <p className="text-sm text-slate-500">{isEditing ? 'Update deal details.' : 'Enter required details to add a new deal.'}</p>
+            <h2 className="text-2xl font-semibold text-slate-800">{isEditing ? 'Edit Opportunity' : 'Create New Opportunity'}</h2>
+            <p className="text-sm text-slate-500">{isEditing ? 'Update Opportunity details.' : 'Enter required details to add a new opportunity.'}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => navigate('/deals')} className="rounded bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Back to Deals</button>
+            <button type="button" onClick={() => navigate('/deals')} className="rounded bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Back to Opportunities</button>
             <Link to="/accounts/new" className="inline-flex items-center gap-2 rounded bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600"><Plus className="size-4" />New Account</Link>
           </div>
         </div>
@@ -252,7 +252,7 @@ export default function DealForm() {
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-5 rounded-lg border border-slate-200 bg-slate-50 p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Deal Details</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Opportunity Details</h3>
               <div className="space-y-4">
                 <div className="flex flex-col gap-2">
               <label className="text-sm font-semibold text-slate-800">Sales Lead</label>
@@ -278,7 +278,7 @@ export default function DealForm() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-semibold text-slate-800">Deal Name *</label>
+              <label className="text-sm font-semibold text-slate-800">Opportunity Name *</label>
               <input
                 name="dealName"
                 value={formData.dealName}
@@ -340,7 +340,7 @@ export default function DealForm() {
 
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold text-slate-800">Deal Amount</label>
+                    <label className="text-sm font-semibold text-slate-800">Opportunity Amount</label>
                     <input name="dealAmount" value={formData.dealAmount} onChange={handleChange} readOnly={Boolean(selectedSalesLead)} className={fieldClass(false)} placeholder="e.g. 150000" />
                   </div>
                   <div className="flex flex-col gap-2">
@@ -416,7 +416,7 @@ export default function DealForm() {
             <button type="button" onClick={() => navigate('/deals')} className="rounded bg-slate-200 px-6 py-3 text-sm font-semibold text-slate-700">Cancel</button>
             <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
               {saving && <Loader2 className="size-4 animate-spin" />}
-              {isEditing ? 'Save Changes' : 'Create Deal'}
+              {isEditing ? 'Save Changes' : 'Create Opportunity'}
             </button>
           </div>
         </form>
