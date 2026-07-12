@@ -2513,16 +2513,21 @@ async function createQuotePDFBuffer(quote) {
       const totalsX = 380;
       const totalsY = doc.y;
 
+      const taxRows = getTaxSummaryRows(quote);
+
       doc.fontSize(9).font('Helvetica');
       doc.text('Subtotal:', totalsX, totalsY, { width: 80, align: 'right' });
       doc.text(`₹${quote.totals.subTotal.toLocaleString('en-IN')}`, totalsX + 85, totalsY, { width: 60, align: 'right' });
-      doc.text(`GST (${quote.taxes.gstPercentage}%):`, totalsX, totalsY + 15, { width: 80, align: 'right' });
-      doc.text(`₹${quote.taxes.gstAmount.toLocaleString('en-IN')}`, totalsX + 85, totalsY + 15, { width: 60, align: 'right' });
+      taxRows.forEach((row, index) => {
+        doc.text(`${row.label}:`, totalsX, totalsY + 15 + (index * 15), { width: 80, align: 'right' });
+        doc.text(`₹${row.amount.toLocaleString('en-IN')}`, totalsX + 85, totalsY + 15 + (index * 15), { width: 60, align: 'right' });
+      });
 
-      doc.rect(totalsX - 5, totalsY + 28, 180, 22).fillAndStroke('#b8bab3', '#cae8d1');
+      const grandTotalBoxY = totalsY + 28 + ((taxRows.length - 1) * 15);
+      doc.rect(totalsX - 5, grandTotalBoxY, 180, 22).fillAndStroke('#b8bab3', '#cae8d1');
       doc.fontSize(11).font('Helvetica-Bold').fillColor('white');
-      doc.text('GRAND TOTAL:', totalsX + 2, totalsY + 34, { width: 200, align: 'left' });
-      doc.text(`₹${quote.totals.grandTotal.toLocaleString('en-IN')}`, totalsX + 84, totalsY + 34, { width: 200, align: 'left' });
+      doc.text('GRAND TOTAL:', totalsX + 2, grandTotalBoxY + 6, { width: 200, align: 'left' });
+      doc.text(`₹${quote.totals.grandTotal.toLocaleString('en-IN')}`, totalsX + 84, grandTotalBoxY + 6, { width: 200, align: 'left' });
 
       doc.fillColor('black');
       doc.moveDown(1);
@@ -2608,45 +2613,69 @@ app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, re
     }
 
     try {
-      const data = recipients;
-      const emailRecipients = data.recipients.recipients[0];
-      const subject = data.recipients.subject;
-      const message = data.recipients.message;
-      // Prepare email content
-      const emailSubject = subject || `Quotation ${quote.quotation.quoteNumber}`;
+      const data = req.body || {};
+      if (!Array.isArray(data.recipients) || data.recipients.length === 0) {
+        return res.status(400).json({ error: 'At least one recipient is required' });
+      }
+
+      const subject = data.subject || `Quotation ${quote.quotation.quoteNumber}`;
+      const message = data.message || '';
+      const emailSubject = subject;
       const htmlText = generateQuotationEmailHTML(quote, message);
       const plainText = generateQuotationPlainText(quote, message);
 
-      const groupEmails = emailRecipients
-      ? emailRecipients.split(/[;,]+/).map((e) => e.trim()).filter(Boolean)
-      : [];
+      const toRecipients = data.recipients.map((email) => ({ address: String(email).trim() })).filter(r => r.address);
 
-    const toRecipients = [
-      ...groupEmails.map((email) => ({ address: email })),
-    ];
+      // Ensure attachments directory exists and save files there
+      const attachmentsDir = path.join(__dirname, '..', 'attachments');
+      await fs.mkdir(attachmentsDir, { recursive: true });
 
-      // Send email to each recipient
+      // Save generated quote PDF to attachments folder
       const pdfBuffer = await createQuotePDFBuffer(quote);
       const attachmentName = `Quote_${quote.quotation.quoteNumber}.pdf`;
-      const attachmentBase64 = pdfBuffer.toString("base64");
+      const pdfFilenameSafe = `${Date.now()}_${attachmentName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const pdfPath = path.join(attachmentsDir, pdfFilenameSafe);
+      await fs.writeFile(pdfPath, pdfBuffer);
+
+      // Build attachments array by reading files from attachments folder
+      const attachments = [];
+
+      // push the saved generated PDF
+      const savedPdfBuffer = await fs.readFile(pdfPath);
+      attachments.push({
+        name: attachmentName,
+        contentType: 'application/pdf',
+        contentInBase64: savedPdfBuffer.toString('base64'),
+      });
+
+      // Merge and save additional attachments from request (base64 payloads)
+      if (Array.isArray(data.attachments)) {
+        for (const a of data.attachments) {
+          if (a && typeof a.name === 'string' && typeof a.contentInBase64 === 'string') {
+            const safeName = a.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const filename = `${Date.now()}_${safeName}`;
+            const filePath = path.join(attachmentsDir, filename);
+            // write the decoded base64 buffer to disk
+            await fs.writeFile(filePath, Buffer.from(a.contentInBase64, 'base64'));
+            const fileBuffer = await fs.readFile(filePath);
+            attachments.push({
+              name: a.name,
+              contentType: a.contentType || 'application/octet-stream',
+              contentInBase64: fileBuffer.toString('base64'),
+            });
+          }
+        }
+      }
 
       const emailMessage = {
-        senderAddress: "DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net",
+        senderAddress: 'DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net',
         content: {
-          subject: subject,
-          plainText: plainText,
+          subject: emailSubject,
+          plainText,
           html: htmlText,
-          attachments: [
-            {
-              name: attachmentName,
-              contentType: 'application/pdf',
-              contentInBase64: attachmentBase64,
-            },
-          ],
+          attachments: attachments,
         },
-        recipients: {
-          to: toRecipients,
-        },
+        recipients: { to: toRecipients },
       };
 
       if (typeof emailClient.send === 'function') {
@@ -2662,16 +2691,7 @@ app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, re
         console.warn('No supported send method found on emailClient; email not sent');
       }
 
-      // Update quote status to "Sent"
-      // const index = quotes.findIndex((q) => q.id === req.params.id);
-      // if (index !== -1) {
-      //   quotes[index].status = 'Sent';
-      //   quotes[index].sentAt = new Date().toISOString();
-      //   quotes[index].sentTo = recipients;
-      //   await writeQuotes(quotes);
-      // }
-
-      res.json({ success: true, message: `Email sent to ${recipients.length} recipient(s)` });
+      res.json({ success: true, message: `Email sent to ${toRecipients.length} recipient(s)` });
     } catch (emailError) {
       console.error('Email sending error:', emailError);
       res.status(500).json({ error: 'Failed to send email: ' + emailError.message });
@@ -2680,6 +2700,25 @@ app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, re
     res.status(500).json({ error: error.message });
   }
 });
+
+function getTaxSummaryRows(quote) {
+  const gstPercentage = Number(quote?.taxes?.gstPercentage || 18);
+  const stateName = (quote?.customer?.billTo?.state || quote?.customer?.shipTo?.state || '').trim();
+  const isKarnataka = stateName.toLowerCase() === 'karnataka';
+  const gstAmount = Number(quote?.totals?.gstAmount ?? quote?.taxes?.gstAmount ?? 0);
+
+  if (isKarnataka) {
+    return [{ label: `GST (${gstPercentage}%)`, amount: gstAmount }];
+  }
+
+  const cgstAmount = Number(quote?.totals?.cgstAmount ?? Math.round(gstAmount / 2));
+  const sgstAmount = Number(quote?.totals?.sgstAmount ?? gstAmount - cgstAmount);
+
+  return [
+    { label: 'CGST (9%)', amount: cgstAmount },
+    { label: 'SGST (9%)', amount: sgstAmount },
+  ];
+}
 
 // Helper function to generate HTML email content
 function generateQuotationEmailHTML(quote, customMessage = '') {
@@ -2731,6 +2770,16 @@ function generateQuotationEmailHTML(quote, customMessage = '') {
                     <span class="summary-label">Valid Until:</span>
                     <span>${new Date(quote.quotation.expiryDate).toLocaleDateString('en-IN')}</span>
                 </div>
+                <div class="summary-row">
+                    <span class="summary-label">Subtotal:</span>
+                    <span>₹${quote.totals.subTotal.toLocaleString('en-IN')}</span>
+                </div>
+                ${getTaxSummaryRows(quote).map((row) => `
+                <div class="summary-row">
+                    <span class="summary-label">${row.label}:</span>
+                    <span>₹${row.amount.toLocaleString('en-IN')}</span>
+                </div>
+                `).join('')}
                 <div class="summary-row" style="border-top: 1px solid #ccc; padding-top: 8px; margin-top: 8px; font-weight: bold; font-size: 16px;">
                     <span>Total Amount:</span>
                     <span>₹${quote.totals.grandTotal.toLocaleString('en-IN')}</span>
@@ -2802,7 +2851,7 @@ ${quote.items.map((item) => `${item.description}
 TOTALS
 ${'='.repeat(50)}
 Subtotal: ₹${quote.totals.subTotal.toLocaleString('en-IN')}
-GST (${quote.taxes.gstPercentage}%): ₹${quote.taxes.gstAmount.toLocaleString('en-IN')}
+${getTaxSummaryRows(quote).map((row) => `${row.label}: ₹${row.amount.toLocaleString('en-IN')}`).join('\n')}
 GRAND TOTAL: ₹${quote.totals.grandTotal.toLocaleString('en-IN')}
 In Words: ${quote.totals.amountInWords}
 

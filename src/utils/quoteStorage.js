@@ -42,10 +42,10 @@ export const generateQuotePDF = async (quoteId) => {
   return response;
 };
 
-export const sendQuoteEmail = (quoteId, recipients) =>
+export const sendQuoteEmail = (quoteId, { recipients, subject, attachments = [] }) =>
   apiRequest(`${API_BASE}/${quoteId}/send-email`, {
     method: 'POST',
-    body: JSON.stringify({ recipients }),
+    body: JSON.stringify({ recipients, subject, attachments }),
   });
 
 export const getQuotesSummary = (quotes) => ({

@@ -38,7 +38,8 @@ export default function QuotationsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [popup, setPopup] = useState({ type: '', quote: null });
-  const [emailForm, setEmailForm] = useState({ recipients: '', subject: '', message: '' });
+  const [emailForm, setEmailForm] = useState({ recipients: '', subject: '' });
+  const [attachments, setAttachments] = useState([]);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailError, setEmailError] = useState('');
 
@@ -107,6 +108,46 @@ export default function QuotationsDashboard() {
     }
   };
 
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const index = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / 1024 ** index).toFixed(1)} ${units[index]}`;
+  };
+
+  const readFileAsBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = String(reader.result).split(',')[1] || '';
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleAttachmentChange = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    try {
+      const newAttachments = await Promise.all(
+        files.map(async (file) => ({
+          name: file.name,
+          contentType: file.type || 'application/octet-stream',
+          contentInBase64: await readFileAsBase64(file),
+          size: file.size,
+        }))
+      );
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    } catch (err) {
+      setEmailError('Failed to read attachments.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const removeAttachment = (index) => setAttachments((prev) => prev.filter((_, i) => i !== index));
+
   const handleSendEmail = async () => {
     if (!emailForm.recipients.trim()) {
       setEmailError('Please enter recipient email addresses');
@@ -117,13 +158,17 @@ export default function QuotationsDashboard() {
     setEmailError('');
 
     try {
-      const recipients = emailForm.recipients.split(',').map(e => e.trim());
-      await sendQuoteEmail(popup.quote.id, { recipients, subject: emailForm.subject, message: emailForm.message });
-      
-      // Update quote status to "Sent"
+      const recipients = emailForm.recipients
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+
+      await sendQuoteEmail(popup.quote.id, { recipients, subject: emailForm.subject, attachments });
+
       await loadQuotes();
       setPopup({ type: '', quote: null });
-      setEmailForm({ recipients: '', subject: '', message: '' });
+      setEmailForm({ recipients: '', subject: '' });
+      setAttachments([]);
       alert('Email sent successfully!');
     } catch (err) {
       setEmailError('Error sending email: ' + err.message);
@@ -302,13 +347,13 @@ export default function QuotationsDashboard() {
                           </button>
                           <button
                             onClick={() => {
-                              setPopup({ type: 'email', quote });
-                              setEmailForm({ 
-                                recipients: quote.customer?.email || '', 
-                                subject: `Quotation ${quote.quotation?.quoteNumber}`,
-                                message: ''
-                              });
-                            }}
+                                setPopup({ type: 'email', quote });
+                                setEmailForm({
+                                  recipients: quote.customer?.email || '',
+                                  subject: `Quotation ${quote.quotation?.quoteNumber}`,
+                                });
+                                setAttachments([]);
+                              }}
                             className="rounded p-2 hover:bg-slate-100 transition-colors"
                             title="Send Email"
                           >
@@ -383,15 +428,46 @@ export default function QuotationsDashboard() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Message (optional)
+                  Attach additional PDFs
                 </label>
-                <textarea
-                  rows="3"
-                  value={emailForm.message}
-                  onChange={(e) => setEmailForm({ ...emailForm, message: e.target.value })}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-3 focus:ring-sky-500/10"
-                  placeholder="Add a custom message..."
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('quote-attach-input')?.click()}
+                    className="inline-flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Attach PDFs
+                  </button>
+                  <span className="text-xs text-slate-500">PDF only — up to 5 files</span>
+                </div>
+                <input
+                  id="quote-attach-input"
+                  type="file"
+                  accept="application/pdf"
+                  multiple
+                  onChange={handleAttachmentChange}
+                  className="sr-only"
                 />
+
+                {attachments.length > 0 && (
+                  <div className="mt-3 space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
+                    {attachments.map((attachment, index) => (
+                      <div key={`${attachment.name}-${index}`} className="flex items-center justify-between gap-3 rounded bg-white px-3 py-2 shadow-sm">
+                        <div className="min-w-0 overflow-hidden text-sm text-slate-700">
+                          <div className="truncate font-medium">{attachment.name}</div>
+                          <div className="truncate text-xs text-slate-500">{attachment.contentType} · {formatFileSize(attachment.size)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(index)}
+                          className="text-red-600 hover:text-red-800 text-sm"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

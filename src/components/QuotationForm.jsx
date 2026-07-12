@@ -22,6 +22,37 @@ const fieldClass = (hasError) =>
       : 'border-slate-300 focus:border-sky-500 focus:ring-sky-500/10',
   ].join(' ');
 
+const indianStates = [
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+];
+
 const emptyQuote = () => ({
   dealid: '',
   email: {
@@ -55,6 +86,7 @@ const emptyQuote = () => ({
     email: '',
     billTo: {
       companyName: '',
+      state: '',
       address: [],
     },
     shipTo: {
@@ -271,18 +303,24 @@ export default function QuotationForm() {
 
   const calculateTotals = () => {
     const subTotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
-    const gstAmount = Math.round(calculateGST(subTotal, formData.taxes.gstPercentage));
+    const gstRate = Number(formData.taxes.gstPercentage || 18);
+    const gstAmount = Math.round(calculateGST(subTotal, gstRate));
     const shippingCharges = formData.commercials.shippingCharges === 'At actuals' ? 0 : Number(formData.commercials.shippingCharges || 0);
     const grandTotal = calculateGrandTotal(subTotal, gstAmount, shippingCharges);
     const amountInWords = numberToWords(grandTotal);
-
-    //console.log('Calculated Totals:', { subTotal, gstAmount,shippingCharges, grandTotal, amountInWords });
+    const selectedState = (formData.customer.billTo.state || '').trim();
+    const isKarnataka = selectedState.toLowerCase() === 'karnataka';
+    const cgstAmount = Math.round(gstAmount / 2);
+    const sgstAmount = gstAmount - cgstAmount;
 
     return {
       subTotal,
       gstAmount,
+      cgstAmount,
+      sgstAmount,
       grandTotal,
       amountInWords,
+      isKarnataka,
     };
   };
 
@@ -625,25 +663,52 @@ export default function QuotationForm() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Bill To Company Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.customer.billTo.companyName}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      customer: {
-                        ...prev.customer,
-                        billTo: { ...prev.customer.billTo, companyName: e.target.value },
-                      },
-                    }))
-                  }
-                  className={fieldClass(false)}
-                  placeholder="Bill to company name"
-                />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Bill To Company Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.customer.billTo.companyName}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        customer: {
+                          ...prev.customer,
+                          billTo: { ...prev.customer.billTo, companyName: e.target.value },
+                        },
+                      }))
+                    }
+                    className={fieldClass(false)}
+                    placeholder="Bill to company name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    State
+                  </label>
+                  <select
+                    value={formData.customer.billTo.state}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        customer: {
+                          ...prev.customer,
+                          billTo: { ...prev.customer.billTo, state: e.target.value },
+                        },
+                      }))
+                    }
+                    className={fieldClass(false)}
+                  >
+                    <option value="">Select state</option>
+                    {indianStates.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -803,8 +868,7 @@ export default function QuotationForm() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Delivery Schedule
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.commercials.deliverySchedule}
                   onChange={(e) =>
                     setFormData((prev) => ({
@@ -813,8 +877,18 @@ export default function QuotationForm() {
                     }))
                   }
                   className={fieldClass(false)}
-                  placeholder="e.g., 4-6 Weeks"
-                />
+                >
+                  <option value="">Select delivery schedule</option>
+                  <option value="1 Week" selected>1 Week</option>
+                  <option value="1~2 Weeks">1~2 Weeks</option>
+                  <option value="2~3 Weeks">2~3 Weeks</option>
+                  <option value="3~4 Weeks">3~4 Weeks</option>
+                  <option value="4~5 Weeks">4~5 Weeks</option>
+                  <option value="6~8 Weeks">6~8 Weeks</option>
+                  <option value="8~10 Weeks">8~10 Weeks</option>
+                  <option value="10~12 Weeks">10~12 Weeks</option>
+                  <option value="12 ~18 Weeks">12 ~18 Weeks</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -839,35 +913,29 @@ export default function QuotationForm() {
           {/* Taxes and Totals */}
           <div className="rounded-lg bg-white p-6 shadow-sm">
             <h3 className="mb-4 text-lg font-semibold text-slate-800">Tax & Totals</h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  GST Percentage
-                </label>
-                <input
-                  type="number"
-                  value={formData.taxes.gstPercentage}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      taxes: { ...prev.taxes, gstPercentage: Number(e.target.value) },
-                    }))
-                  }
-                  className={fieldClass(false)}
-                  placeholder="18"
-                />
-              </div>
-            </div>
 
             <div className="mt-6 space-y-2 border-t border-slate-200 pt-4">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-700">Subtotal:</span>
                 <span className="font-medium text-slate-900">₹{totals.subTotal.toLocaleString('en-IN')}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-700">GST ({formData.taxes.gstPercentage}%):</span>
-                <span className="font-medium text-slate-900">₹{totals.gstAmount.toLocaleString('en-IN')}</span>
-              </div>
+              {totals.isKarnataka ? (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-700">GST ({formData.taxes.gstPercentage}%):</span>
+                  <span className="font-medium text-slate-900">₹{totals.gstAmount.toLocaleString('en-IN')}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-700">CGST (9%):</span>
+                    <span className="font-medium text-slate-900">₹{totals.cgstAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-700">SGST (9%):</span>
+                    <span className="font-medium text-slate-900">₹{totals.sgstAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-semibold">
                 <span className="text-slate-800">Grand Total:</span>
                 <span className="text-slate-900">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
@@ -882,6 +950,7 @@ export default function QuotationForm() {
           {/* Bank Details */}
           <div className="rounded-lg bg-white p-6 shadow-sm">
             <h3 className="mb-4 text-lg font-semibold text-slate-800">Bank Details</h3>
+            <p className="mb-4 text-sm text-slate-500">This section is read-only.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -890,13 +959,8 @@ export default function QuotationForm() {
                 <input
                   type="text"
                   value={formData.bankDetails.accountName}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      bankDetails: { ...prev.bankDetails, accountName: e.target.value },
-                    }))
-                  }
-                  className={fieldClass(false)}
+                  readOnly
+                  className={`${fieldClass(false)} cursor-not-allowed bg-slate-100`}
                   placeholder="Account holder name"
                 />
               </div>
@@ -907,15 +971,10 @@ export default function QuotationForm() {
                 <input
                   type="text"
                   value={formData.bankDetails.bankName}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      bankDetails: { ...prev.bankDetails, bankName: e.target.value },
-                    }))
-                  }
-                  className={fieldClass(false)}
+                  readOnly
+                  className={`${fieldClass(false)} cursor-not-allowed bg-slate-100`}
                   placeholder="Bank name"
-               />
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -924,13 +983,8 @@ export default function QuotationForm() {
                 <input
                   type="text"
                   value={formData.bankDetails.accountNumber}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      bankDetails: { ...prev.bankDetails, accountNumber: e.target.value },
-                    }))
-                  }
-                  className={fieldClass(false)}
+                  readOnly
+                  className={`${fieldClass(false)} cursor-not-allowed bg-slate-100`}
                   placeholder="Account number"
                 />
               </div>
@@ -941,13 +995,8 @@ export default function QuotationForm() {
                 <input
                   type="text"
                   value={formData.bankDetails.branchAddress}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      bankDetails: { ...prev.bankDetails, branchAddress: e.target.value },
-                    }))
-                  }
-                  className={fieldClass(false)}
+                  readOnly
+                  className={`${fieldClass(false)} cursor-not-allowed bg-slate-100`}
                   placeholder="Branch address"
                 />
               </div>
