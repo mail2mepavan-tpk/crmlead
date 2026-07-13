@@ -40,7 +40,7 @@ export default function EnquiryManagementSystem() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<SalesLeadsDashboard />} />
             <Route path="/intake" element={<IntakeForm />} />
             <Route path="/intake/:id" element={<IntakeForm />} />
             <Route path="/accounts" element={<AccountsDashboard />} />

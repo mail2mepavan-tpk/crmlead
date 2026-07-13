@@ -116,7 +116,7 @@ const emptyQuote = () => ({
     branchAddress: 'Ground Floor, Trinity Complex Kalyan Nagar ORR, Bangalore 560043',
   },
   signature: {
-    authorizedPerson: '',
+    authorizedPerson: 'Director',
   },
   status: 'Pending',
 });
@@ -127,6 +127,7 @@ const emptyItem = () => ({
   productCode: '',
   productName: '',
   description: '',
+  unitMeasurements: '',
   quantity: 1,
   unitPrice: 0,
   discountPercent: 0,
@@ -268,23 +269,36 @@ export default function QuotationForm() {
 
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...items];
-    updatedItems[index][field] = field === 'quantity' || field === 'unitPrice' || field === 'discountPercent' ? Number(value) : value;
+    const item = updatedItems[index];
+
+    if (field === 'quantity' || field === 'unitPrice' || field === 'discountPercent') {
+      item[field] = Number(value);
+    } else {
+      item[field] = value;
+    }
 
     if (field === 'productCode') {
       const selectedProduct = products.find((product) => product.productCode === value);
-      updatedItems[index].itemCode = selectedProduct?.productCode || '';
-      updatedItems[index].description = selectedProduct?.productName || '';
-      updatedItems[index].productName = selectedProduct?.productName || '';
+      item.itemCode = selectedProduct?.productCode || '';
+      item.description = selectedProduct?.productName || '';
+      item.productName = selectedProduct?.productName || '';
+      item.unitMeasurements = selectedProduct?.unitMeasurements || '';
+      if (selectedProduct?.salePrice !== undefined && selectedProduct?.salePrice !== null && selectedProduct?.salePrice !== '') {
+        item.unitPrice = Number(selectedProduct.salePrice);
+      }
     }
 
     if (field === 'productName') {
       const selectedProduct = products.find((product) => product.productName === value);
-      updatedItems[index].itemCode = selectedProduct?.productCode || '';
-      updatedItems[index].description = selectedProduct?.productName || '';
-      updatedItems[index].productCode = selectedProduct?.productCode || '';
+      item.itemCode = selectedProduct?.productCode || '';
+      item.description = selectedProduct?.productName || '';
+      item.productCode = selectedProduct?.productCode || '';
+      item.unitMeasurements = selectedProduct?.unitMeasurements || '';
+      if (selectedProduct?.salePrice !== undefined && selectedProduct?.salePrice !== null && selectedProduct?.salePrice !== '') {
+        item.unitPrice = Number(selectedProduct.salePrice);
+      }
     }
 
-    const item = updatedItems[index];
     item.discountAmount = (item.unitPrice * item.quantity * item.discountPercent) / 100;
     item.priceAfterDiscount = item.quantity * item.unitPrice - item.discountAmount;
     item.lineTotal = item.priceAfterDiscount;
@@ -782,6 +796,9 @@ export default function QuotationForm() {
                             </option>
                           ))}
                         </select>
+                        {item.unitMeasurements ? (
+                          <p className="mt-1 text-[11px] text-slate-500">Units: {item.unitMeasurements}</p>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <select
@@ -814,6 +831,9 @@ export default function QuotationForm() {
                           className="w-full rounded border border-slate-300 px-2 py-1 text-xs text-right focus:border-sky-500 focus:outline-none"
                           placeholder="0"
                         />
+                        {item.productCode ? (
+                          <p className="mt-1 text-[11px] text-emerald-600">Sale Price auto-filled</p>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <input
@@ -1020,7 +1040,7 @@ export default function QuotationForm() {
                       signature: { ...prev.signature, authorizedPerson: e.target.value },
                     }))
                   }
-                  className={fieldClass(false)}
+                  className={`${fieldClass(false)} cursor-not-allowed bg-slate-100`}
                   placeholder="Authorized person name"
                 />
               </div>

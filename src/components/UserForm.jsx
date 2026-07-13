@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import { CheckCircle2, Loader2 } from 'lucide-react';
-import { createUser, updateUser, getUserById } from '../utils/userStorage';
+import { createUser, updateUser, getUserById, getUsers } from '../utils/userStorage';
 import { useAuth } from '../context/AuthContext';
 
 const fieldClass = (hasError) =>
@@ -41,6 +41,31 @@ export default function UserForm() {
   const [loading, setLoading] = useState(isEditing && Boolean(editId));
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [managers, setManagers] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const users = await getUsers();
+        if (!cancelled) {
+          const managerUsers = Array.isArray(users)
+            ? users.filter((user) => String(user.role || '').toLowerCase() === 'manager')
+            : [];
+          setManagers(managerUsers);
+        }
+      } catch {
+        if (!cancelled) {
+          setManagers([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isEditing) {
@@ -296,14 +321,30 @@ export default function UserForm() {
               <label htmlFor="reportingManager" className="text-sm font-semibold text-slate-800">
                 Reporting Manager
               </label>
-              <input
+              <select
                 id="reportingManager"
                 name="reportingManager"
                 value={formData.reportingManager}
                 onChange={handleChange}
                 className={fieldClass(false)}
-                placeholder="Jane Smith"
-              />
+              >
+                <option value="">Select reporting manager</option>
+                {managers.map((manager) => {
+                  const managerName = manager.fullName || manager.username || manager.email || 'Unnamed manager';
+                  return (
+                    <option key={manager.id || manager.username || manager.email} value={managerName}>
+                      {managerName}
+                    </option>
+                  );
+                })}
+                {formData.reportingManager &&
+                  !managers.some((manager) => {
+                    const managerName = manager.fullName || manager.username || manager.email || 'Unnamed manager';
+                    return managerName === formData.reportingManager;
+                  }) && (
+                    <option value={formData.reportingManager}>{formData.reportingManager} (Current)</option>
+                  )}
+              </select>
             </div>
           </div>
 
@@ -367,6 +408,7 @@ export default function UserForm() {
               >
                 <option value="Executive">Executive</option>
                 <option value="Manager">Manager</option>
+                <option value="Director">Director</option>
                 <option value="Admin">Admin</option>
               </select>
             </div>

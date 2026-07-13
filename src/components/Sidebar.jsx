@@ -50,7 +50,7 @@ function SectionLabel({ children }) {
 }
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isDirector, isSalesManager } = useAuth();
 
   return (
     <>
@@ -82,7 +82,7 @@ export default function Sidebar({ isOpen, onClose }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <SectionLabel>Sales</SectionLabel>
+          <SectionLabel>Leads & Opportunities</SectionLabel>
           <div className="flex flex-col gap-0.5">
             <NavItem
               to="/sales-leads"
@@ -116,6 +116,29 @@ export default function Sidebar({ isOpen, onClose }) {
               label="Contacts"
             />
           </div>
+          {(isDirector || isAdmin || isSalesManager) && (
+            <> <SectionLabel>Sales Quotes</SectionLabel>
+              <div className="flex flex-col gap-0.5">
+              <NavItem
+                  to="/quotations"
+                  onClose={onClose}
+                  icon={FileText}
+                  label="Quotations"
+                />
+          </div></>
+          )}
+
+           {(isDirector || isAdmin) && (
+            <> <SectionLabel>Sales Trends</SectionLabel>
+              <div className="flex flex-col gap-0.5">
+                <NavItem
+                  to="/revenue"
+                  onClose={onClose}
+                  icon={ArrowUpRight}
+                  label="Revenue Dashboard"
+                />
+          </div></>
+          )}
 
           {isAdmin && (
             <>
@@ -144,18 +167,6 @@ export default function Sidebar({ isOpen, onClose }) {
                   onClose={onClose}
                   icon={Mail}
                   label="Email Groups"
-                />
-                <NavItem
-                  to="/quotations"
-                  onClose={onClose}
-                  icon={FileText}
-                  label="Quotations"
-                />
-                <NavItem
-                  to="/revenue"
-                  onClose={onClose}
-                  icon={ArrowUpRight}
-                  label="Revenue Dashboard"
                 />
               </div>
             </>

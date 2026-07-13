@@ -1620,6 +1620,8 @@ app.post('/api/products', requireAuth, async (req, res) => {
       productCode: req.body?.productCode ?? '',
       productName: req.body?.productName ?? '',
       productDesciption: req.body?.productDesciption ?? '',
+      unitMeasurements: req.body?.unitMeasurements ?? '',
+      salePrice: req.body?.salePrice === '' ? '' : (req.body?.salePrice ?? ''),
       createdBy: req.body?.createdBy ?? 'System',
       createdDate: new Date().toISOString(),
       updatedBy: req.body?.updatedBy ?? 'System',
@@ -1645,6 +1647,10 @@ app.put('/api/products/:id', requireAuth, async (req, res) => {
       productCode: req.body?.productCode ?? products[index].productCode ?? '',
       productName: req.body?.productName ?? products[index].productName ?? '',
       productDesciption: req.body?.productDesciption ?? products[index].productDesciption ?? '',
+      unitMeasurements: req.body?.unitMeasurements ?? products[index].unitMeasurements ?? '',
+      salePrice: req.body?.salePrice === undefined
+        ? (products[index].salePrice ?? '')
+        : (req.body.salePrice === '' ? '' : Number(req.body.salePrice)),
       updatedBy: req.body?.updatedBy ?? 'System',
       updatedDate: new Date().toISOString(),
     };
@@ -1911,7 +1917,7 @@ app.delete('/api/deals/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/users', requireAuth, requireAdmin, async (_req, res) => {
+app.get('/api/users', requireAuth, async (_req, res) => {
   try {
     const users = await readUsers();
     res.json(users.map(sanitizeUser));
@@ -1920,7 +1926,7 @@ app.get('/api/users', requireAuth, requireAdmin, async (_req, res) => {
   }
 });
 
-app.get('/api/sales-regions', requireAuth, requireAdmin, async (_req, res) => {
+app.get('/api/sales-regions', requireAuth, async (_req, res) => {
   try {
     res.json(await readSalesRegions());
   } catch (error) {
@@ -2001,7 +2007,7 @@ app.delete('/api/sales-regions/:id', requireAuth, requireAdmin, async (req, res)
   }
 });
 
-app.get('/api/lead-sources', requireAuth, requireAdmin, async (_req, res) => {
+app.get('/api/lead-sources', requireAuth, async (_req, res) => {
   try {
     res.json(await readLeadSources());
   } catch (error) {
@@ -2161,7 +2167,7 @@ app.delete('/api/email-groups/:id', requireAuth, requireAdmin, async (req, res) 
   }
 });
 
-app.get('/api/users/:id', requireAuth, async (req, res) => {
+app.get('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const isAdmin = req.authUser.role?.toLowerCase() === 'admin';
     const isSelf = matchId({ id: req.authUser.id }, req.params.id);
@@ -2214,7 +2220,7 @@ app.post('/api/users', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', requireAuth, async (req, res) => {
+app.put('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const isAdmin = req.authUser.role?.toLowerCase() === 'admin';
     const isSelf = matchId({ id: req.authUser.id }, req.params.id);
@@ -2467,20 +2473,20 @@ async function createQuotePDFBuffer(quote) {
       const tableTop = doc.y;
       const col1 = 50,
         col2 = 110,
-        col3 = 280,
-        col4 = 360,
-        col5 = 420,
-        col6 = 480;
-      const rowHeight = 18;
+        col3 = 240,
+        col4 = 320,
+        col5 = 390,
+        col6 = 460;
+      const rowHeight = 25;
       const pageWidth = 550;
 
       // Table Header with background
       doc.rect(col1 - 5, tableTop, pageWidth - col1 + 5, rowHeight).fillAndStroke('#2c3e50', '#2c3e50');
       doc.fontSize(9).font('Helvetica-Bold').fillColor('white');
       doc.text('Item Code', col1, tableTop + 4, { width: 50 });
-      doc.text('Description', col2, tableTop + 4, { width: 160 });
+      doc.text('Product', col2, tableTop + 4, { width: 120 });
       doc.text('Qty', col3, tableTop + 4, { width: 50, align: 'center' });
-      doc.text('Unit Price (₹)', col4, tableTop + 4, { width: 50, align: 'right' });
+      doc.text('Unit Price (₹)', col4, tableTop + 4, { width: 60, align: 'right' });
       doc.text('Discount', col5, tableTop + 4, { width: 50, align: 'center' });
       doc.text('Total (₹)', col6, tableTop + 4, { width: 60, align: 'right' });
 
@@ -2494,11 +2500,14 @@ async function createQuotePDFBuffer(quote) {
           doc.rect(col1 - 5, currentY, pageWidth - col1 + 5, rowHeight).fill('#f5f5f5');
         }
 
+        const productLabel = item.description || item.productName || '-';
+        const unitDetails = item.unitMeasurements ? ` (${item.unitMeasurements})` : '';
+
         doc.fontSize(8).font('Helvetica').fillColor('black');
         doc.text(item.itemCode || '-', col1, currentY + 4, { width: 50 });
-        doc.text(item.description, col2, currentY + 4, { width: 160 });
+        doc.text(`${productLabel}${unitDetails}`, col2, currentY + 4, { width: 120 });
         doc.text(String(item.quantity), col3, currentY + 4, { width: 50, align: 'center' });
-        doc.text(`₹${item.unitPrice.toLocaleString('en-IN')}`, col4, currentY + 4, { width: 50, align: 'right' });
+        doc.text(`₹${item.unitPrice.toLocaleString('en-IN')}`, col4, currentY + 4, { width: 60, align: 'right' });
         doc.text(`${item.discountPercent}%`, col5, currentY + 4, { width: 50, align: 'center' });
         doc.text(`₹${item.lineTotal.toLocaleString('en-IN')}`, col6, currentY + 4, { width: 60, align: 'right' });
 
@@ -2511,7 +2520,7 @@ async function createQuotePDFBuffer(quote) {
 
       // TOTALS SECTION
       const totalsX = 380;
-      const totalsY = doc.y;
+      const totalsY = doc.y + 8;
 
       const taxRows = getTaxSummaryRows(quote);
 
@@ -2789,11 +2798,11 @@ function generateQuotationEmailHTML(quote, customMessage = '') {
             <p><strong>Items Summary:</strong></p>
             <table style="width: 100%; font-size: 13px; margin: 15px 0;">
                 <tr style="background: #f5f5f5;">
-                    <th style="text-align: left; padding: 8px;">Description</th>
+                    <th style="text-align: left; padding: 8px;">Product</th>
                     <th style="text-align: center; padding: 8px;">Qty</th>
                     <th style="text-align: right; padding: 8px;">Amount</th>
                 </tr>
-                ${quote.items.map((item) => `<tr><td style="padding: 8px;">${item.description}</td><td style="text-align: center; padding: 8px;">${item.quantity}</td><td style="text-align: right; padding: 8px;">₹${item.lineTotal.toLocaleString('en-IN')}</td></tr>`).join('')}
+                ${quote.items.map((item) => `<tr><td style="padding: 8px;">${item.description || item.productName || '-'}${item.unitMeasurements ? ` (${item.unitMeasurements})` : ''}</td><td style="text-align: center; padding: 8px;">${item.quantity}</td><td style="text-align: right; padding: 8px;">₹${item.lineTotal.toLocaleString('en-IN')}</td></tr>`).join('')}
             </table>
 
             <p><strong>Payment Terms:</strong> ${quote.commercials.paymentTerms}</p>
@@ -2842,7 +2851,7 @@ Valid Until: ${new Date(quote.quotation.expiryDate).toLocaleDateString('en-IN')}
 
 LINE ITEMS
 ${'='.repeat(50)}
-${quote.items.map((item) => `${item.description}
+${quote.items.map((item) => `${item.description || item.productName || '-'}${item.unitMeasurements ? ` (${item.unitMeasurements})` : ''}
   Quantity: ${item.quantity}
   Unit Price: ₹${item.unitPrice.toLocaleString('en-IN')}
   Discount: ${item.discountPercent}%

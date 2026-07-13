@@ -39,10 +39,12 @@ export function AuthProvider({ children }) {
   };
 
   const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
+  const isDirector = currentUser?.role?.toLowerCase() === 'director';
+  const isSalesManager = currentUser?.role?.toLowerCase() === 'salesmanager';
 
   return (
     <AuthContext.Provider
-      value={{ currentUser, ready, login, logout, updateSessionUser, isAdmin }}
+      value={{ currentUser, ready, login, logout, updateSessionUser, isAdmin, isDirector, isSalesManager }}
     >
       {children}
     </AuthContext.Provider>

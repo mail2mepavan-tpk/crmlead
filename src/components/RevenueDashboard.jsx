@@ -5,6 +5,7 @@ import { getSalesLeads } from '../utils/salesLeadStorage';
 import { getAccounts } from '../utils/accountStorage';
 import { getContacts } from '../utils/contactStorage';
 import { getProducts } from '../utils/productStorage';
+import { getDeals } from '../utils/dealStorage';
 import { useAuth } from '../context/AuthContext';
 
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -27,6 +28,7 @@ export default function RevenueDashboard() {
   const [accounts, setAccounts] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [products, setProducts] = useState([]);
+  const [deals, setDeals] = useState([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(true);
@@ -37,17 +39,17 @@ export default function RevenueDashboard() {
     loadDashboardData();
   }, [isAdmin]);
 
-  const loadDashboardData = async () => {
-    try {
+  const loadDashboardData = async () => {    try {
       setLoading(true);
       setError('');
 
-      const [quotesResult, leadsResult, accountsResult, contactsResult, productsResult] = await Promise.allSettled([
+      const [quotesResult, leadsResult, accountsResult, contactsResult, productsResult, dealsResult] = await Promise.allSettled([
         getQuotes(),
         getSalesLeads(),
         getAccounts(),
         getContacts(),
         getProducts(),
+        getDeals(),
       ]);
 
       setQuotes(quotesResult.status === 'fulfilled' ? quotesResult.value : []);
@@ -55,8 +57,9 @@ export default function RevenueDashboard() {
       setAccounts(accountsResult.status === 'fulfilled' ? accountsResult.value : []);
       setContacts(contactsResult.status === 'fulfilled' ? contactsResult.value : []);
       setProducts(productsResult.status === 'fulfilled' ? productsResult.value : []);
+      setDeals(dealsResult.status === 'fulfilled' ? dealsResult.value : []);
 
-      if ([quotesResult, leadsResult, accountsResult, contactsResult, productsResult].some((result) => result.status === 'rejected')) {
+      if ([quotesResult, leadsResult, accountsResult, contactsResult, productsResult, dealsResult].some((result) => result.status === 'rejected')) {
         setError('Some dashboard data could not be loaded');
       }
     } catch (err) {
@@ -66,6 +69,7 @@ export default function RevenueDashboard() {
       setAccounts([]);
       setContacts([]);
       setProducts([]);
+      setDeals([]);
     } finally {
       setLoading(false);
     }
@@ -122,6 +126,7 @@ export default function RevenueDashboard() {
   const filteredAccounts = useMemo(() => filterByDateRange(accounts), [accounts, startDate, endDate]);
   const filteredContacts = useMemo(() => filterByDateRange(contacts), [contacts, startDate, endDate]);
   const filteredProducts = useMemo(() => filterByDateRange(products), [products, startDate, endDate]);
+  const filteredDeals = useMemo(() => filterByDateRange(deals), [deals, startDate, endDate]);
 
   const counts = useMemo(() => ({
     leads: filteredLeads.length,
@@ -174,6 +179,53 @@ export default function RevenueDashboard() {
       dealAmountCount: dealAmounts.length,
     };
   }, [filteredLeads]);
+
+  const dealStats = useMemo(() => {
+    const stageCounts = filteredDeals.reduce((acc, deal) => {
+      const stage = deal.dealStage || 'Unknown';
+      acc[stage] = (acc[stage] || 0) + 1;
+      return acc;
+    }, {});
+
+    const regionCounts = filteredDeals.reduce((acc, deal) => {
+      const region = deal.region || 'Unknown';
+      acc[region] = (acc[region] || 0) + 1;
+      return acc;
+    }, {});
+
+    const sourceCounts = filteredDeals.reduce((acc, deal) => {
+      const source = deal.dealSource || 'Unknown';
+      acc[source] = (acc[source] || 0) + 1;
+      return acc;
+    }, {});
+
+    const dealAmounts = filteredDeals
+      .map((deal) => Number(deal.dealAmount) || 0)
+      .filter((amount) => amount > 0);
+
+    const totalDealAmount = dealAmounts.reduce((sum, amount) => sum + amount, 0);
+    const averageDealAmount = dealAmounts.length ? totalDealAmount / dealAmounts.length : 0;
+    const highestDealAmount = dealAmounts.length ? Math.max(...dealAmounts) : 0;
+
+    const probabilities = filteredDeals
+      .map((deal) => Number(deal.probability) || 0)
+      .filter((value) => value >= 0);
+
+    const averageProbability = probabilities.length
+      ? probabilities.reduce((sum, value) => sum + value, 0) / probabilities.length
+      : 0;
+
+    return {
+      stageCounts,
+      regionCounts,
+      sourceCounts,
+      totalDealAmount,
+      averageDealAmount,
+      highestDealAmount,
+      averageProbability,
+      dealAmountCount: dealAmounts.length,
+    };
+  }, [filteredDeals]);
 
   const stats = useMemo(() => {
     const revenueByStatus = {
@@ -240,7 +292,7 @@ export default function RevenueDashboard() {
     { label: 'Rejected', value: stats.revenueByStatus.Rejected, color: 'bg-red-500' },
   ];
 
-  if (!isAdmin) {
+  if (!isAdmin && !isDirector) {
     return (
       <div className="min-h-full bg-surface px-5 py-8">
         <div className="mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -407,7 +459,7 @@ export default function RevenueDashboard() {
                 chip: 'bg-emerald-50 text-emerald-700',
               },
               {
-                title: 'Deal Amount',
+                title: 'Opportunity Amount',
                 data: [
                   ['Total', currencyFormatter.format(leadStats.totalDealAmount)],
                   ['Average', currencyFormatter.format(leadStats.averageDealAmount)],
@@ -454,57 +506,86 @@ export default function RevenueDashboard() {
           </div>
         </div>
 
+        <div className="rounded-3xl bg-white p-6 shadow-[0_16px_40px_-16px_rgba(15,23,42,0.28)] ring-1 ring-slate-200">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm uppercase tracking-[0.18em] text-slate-500"><b>Opportunities</b> Insights</p>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 xl:grid-cols-5">
+            {[
+              {
+                title: 'Opportunity Stage',
+                data: Object.entries(dealStats.stageCounts).slice(0, 4),
+                accent: 'from-sky-500 to-cyan-400',
+                chip: 'bg-sky-50 text-sky-700',
+              },
+              {
+                title: 'Sales Region',
+                data: Object.entries(dealStats.regionCounts).slice(0, 4),
+                accent: 'from-emerald-500 to-lime-400',
+                chip: 'bg-emerald-50 text-emerald-700',
+              },
+              {
+                title: 'Opportunity Amount',
+                data: [
+                  ['Total', currencyFormatter.format(dealStats.totalDealAmount)],
+                  ['Average', currencyFormatter.format(dealStats.averageDealAmount)],
+                  ['Highest', currencyFormatter.format(dealStats.highestDealAmount)],
+                  ['Deals with amount', dealStats.dealAmountCount],
+                ],
+                accent: 'from-violet-500 to-fuchsia-400',
+                chip: 'bg-violet-50 text-violet-700',
+              },
+              {
+                title: 'Opportunity Source',
+                data: Object.entries(dealStats.sourceCounts).slice(0, 4),
+                accent: 'from-amber-500 to-orange-400',
+                chip: 'bg-amber-50 text-amber-700',
+              },
+              {
+                title: 'Probability',
+                data: [[ 'Average', `${dealStats.averageProbability.toFixed(1)}%` ]],
+                accent: 'from-rose-500 to-pink-400',
+                chip: 'bg-rose-50 text-rose-700',
+              },
+            ].map((card) => (
+              <div
+                key={card.title}
+                className="relative overflow-hidden rounded-3xl border border-white/70 bg-white p-4 shadow-[0_10px_25px_-12px_rgba(15,23,42,0.25)]"
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${card.accent} opacity-10`} />
+                <div className="relative">
+                  <div className={`inline-flex rounded-2xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${card.chip}`}>
+                    {card.title}
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {card.data.map(([label, value]) => (
+                      <div key={label} className="flex items-center justify-between text-sm text-slate-700">
+                        <span>{label}</span>
+                        <span className="font-semibold">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className={`mt-4 h-1.5 rounded-full bg-gradient-to-r ${card.accent}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
           <div className="grid gap-6">
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Revenue by Status
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-900">
-                    {currencyFormatter.format(stats.totalRevenue)}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-600">
-                  Avg per quote
-                  <p className="mt-1 text-lg font-semibold text-slate-900">
-                    {currencyFormatter.format(stats.averageRevenue)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-8 space-y-4">
-                {statusBars.map((status) => {
-                  const percent = stats.totalRevenue ? Math.round((status.value / stats.totalRevenue) * 100) : 0;
-                  return (
-                    <div key={status.label} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm font-medium text-slate-700">
-                        <span>{status.label}</span>
-                        <span>{currencyFormatter.format(status.value)}</span>
-                      </div>
-                      <div className="h-3 rounded-full bg-slate-200">
-                        <div
-                          className={`${status.color} h-3 rounded-full transition-all duration-300`}
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm uppercase tracking-[0.18em] text-slate-500">Accepted Revenue</p>
+                <p className="text-sm uppercase tracking-[0.18em] text-slate-500">Quotes Accepted Revenue</p>
                 <p className="mt-4 text-3xl font-semibold text-emerald-700">
                   {currencyFormatter.format(stats.revenueByStatus.Accepted)}
                 </p>
                 <p className="mt-2 text-sm text-slate-500">{stats.acceptedPercent}% of total revenue</p>
               </div>
               <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-                <p className="text-sm uppercase tracking-[0.18em] text-slate-500">Pending Revenue</p>
+                <p className="text-sm uppercase tracking-[0.18em] text-slate-500">Quotes Pending Revenue</p>
                 <p className="mt-4 text-3xl font-semibold text-amber-700">
                   {currencyFormatter.format(stats.revenueByStatus.Pending)}
                 </p>
@@ -515,7 +596,7 @@ export default function RevenueDashboard() {
             <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm uppercase tracking-[0.18em] text-slate-500">Revenue Tiles</p>
+                  <p className="text-sm uppercase tracking-[0.18em] text-slate-500">Quotes Revenue</p>
                   <p className="mt-2 text-lg font-semibold text-slate-900">Sales momentum across statuses</p>
                 </div>
                 <div className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
@@ -539,31 +620,6 @@ export default function RevenueDashboard() {
           </div>
 
           <div className="grid gap-6">
-            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-              <p className="text-sm uppercase tracking-[0.18em] text-slate-500">Revenue Distribution</p>
-              <div className="mt-6 space-y-4">
-                {Object.entries(stats.revenueByStatus).map(([status, value]) => {
-                  const percent = stats.totalRevenue ? Math.round((value / stats.totalRevenue) * 100) : 0;
-                  return (
-                    <div key={status} className="flex items-center gap-4">
-                      <div className={`h-3 flex-1 rounded-full ${statusStyles[status]}`} />
-                      <div className="min-w-[4.5rem] text-right text-sm font-semibold text-slate-700">
-                        {percent}%
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-6 grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                {Object.entries(stats.countsByStatus).map(([status, count]) => (
-                  <div key={status} className="flex items-center justify-between text-sm text-slate-700">
-                    <span>{status}</span>
-                    <span className="font-semibold">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
               <div className="flex items-center justify-between">
                 <div>

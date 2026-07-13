@@ -30,8 +30,12 @@ export default function DealsDashboard() {
     try {
       setLoading(true);
       const data = await getDeals();
-      setDeals(data);
-      setSummary(getDealsSummary(data));
+      var filteredData = data;
+      if (JSON.parse(sessionStorage.getItem('crm_current_user'))?.role?.toLowerCase() === 'executive') {
+        filteredData = data.filter((lead) => lead.createdBy.toLowerCase() === JSON.parse(sessionStorage.getItem('crm_current_user')).username.toLowerCase());
+      }
+      setDeals(filteredData);
+      setSummary(getDealsSummary(filteredData));
       setCurrentPage(1);
     } catch (err) {
       setDeals([]);

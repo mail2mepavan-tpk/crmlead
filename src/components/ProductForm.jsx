@@ -13,6 +13,8 @@ const emptyForm = () => ({
   productCode: '',
   productName: '',
   productDesciption: '',
+  unitMeasurements: '',
+  salePrice: '',
 });
 
 export default function ProductForm() {
@@ -42,6 +44,8 @@ export default function ProductForm() {
             productCode: product.productCode || '',
             productName: product.productName || '',
             productDesciption: product.productDesciption || '',
+            unitMeasurements: product.unitMeasurements || '',
+            salePrice: product.salePrice ?? '',
           });
         }
       } catch {
@@ -91,6 +95,8 @@ export default function ProductForm() {
       productCode: formData.productCode.trim(),
       productName: formData.productName.trim(),
       productDesciption: formData.productDesciption.trim(),
+      unitMeasurements: formData.unitMeasurements.trim(),
+      salePrice: formData.salePrice === '' ? '' : Number(formData.salePrice),
       createdBy: currentUser?.fullName || currentUser?.username || 'System',
       createdDate: new Date().toISOString(),
       updatedBy: currentUser?.fullName || currentUser?.username || 'System',
@@ -165,6 +171,14 @@ export default function ProductForm() {
               <label htmlFor="productName" className="text-sm font-semibold text-slate-800">Product Name *</label>
               <input id="productName" name="productName" value={formData.productName} onChange={handleChange} className={fieldClass(errors.productName)} placeholder="Wireless Headphones" />
               {errors.productName && <span className="text-xs font-medium text-red-500">{errors.productName}</span>}
+            </div>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="unitMeasurements" className="text-sm font-semibold text-slate-800">Unit Measurements</label>
+              <input id="unitMeasurements" name="unitMeasurements" value={formData.unitMeasurements} onChange={handleChange} className={fieldClass(false)} placeholder="e.g. 1 Box / 10 Units" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="salePrice" className="text-sm font-semibold text-slate-800">Sale Price</label>
+              <input id="salePrice" name="salePrice" type="number" step="0.01" min="0" value={formData.salePrice} onChange={handleChange} className={fieldClass(false)} placeholder="0.00" />
             </div>
             <div className="flex flex-col gap-2 sm:col-span-2">
               <label htmlFor="productDesciption" className="text-sm font-semibold text-slate-800">Description</label>
