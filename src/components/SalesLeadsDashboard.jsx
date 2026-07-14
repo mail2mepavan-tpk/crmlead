@@ -35,8 +35,6 @@ export default function SalesLeadsDashboard() {
     try {
       setLoading(true);
       setError('');
-      console.log('Current user from sessionStorage:', sessionStorage.getItem('crm_current_user'));
-      console.log('Current user parsed:', JSON.parse(sessionStorage.getItem('crm_current_user')).username);
       const data = await getSalesLeads();
       var filteredData = data;
       if (JSON.parse(sessionStorage.getItem('crm_current_user'))?.role?.toLowerCase() === 'executive') {

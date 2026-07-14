@@ -59,7 +59,11 @@ export default function EnquiryManagementSystem() {
             <Route path="/products/new" element={<ProductForm />} />
             <Route path="/products/:id/edit" element={<ProductForm />} />
             <Route path="/profile" element={<UserForm />} />
-
+            <Route path="/quotations" element={<QuotationsDashboard />} />
+            <Route path="/quotations/new" element={<QuotationForm />} />
+            <Route path="/quotations/:id/edit" element={<QuotationForm />} />
+            <Route path="/quotations/new/deal/:dealId" element={<QuotationForm />} />
+            <Route path="/revenue" element={<RevenueDashboard />} />
             <Route element={<AdminRoute />}>
               <Route path="/users" element={<UsersDashboard />} />
               <Route path="/users/new" element={<UserForm />} />
@@ -73,11 +77,6 @@ export default function EnquiryManagementSystem() {
               <Route path="/email-groups" element={<EmailGroupsDashboard />} />
               <Route path="/email-groups/new" element={<EmailGroupForm />} />
               <Route path="/email-groups/:id/edit" element={<EmailGroupForm />} />
-              <Route path="/quotations" element={<QuotationsDashboard />} />
-              <Route path="/quotations/new" element={<QuotationForm />} />
-              <Route path="/quotations/:id/edit" element={<QuotationForm />} />
-              <Route path="/quotations/new/deal/:dealId" element={<QuotationForm />} />
-              <Route path="/revenue" element={<RevenueDashboard />} />
             </Route>
           </Route>
         </Route>

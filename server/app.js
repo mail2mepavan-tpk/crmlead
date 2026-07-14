@@ -1385,7 +1385,7 @@ function requireAuth(req, res, next) {
 
 function requireAdmin(req, res, next) {
   if (req.authUser.role?.toLowerCase() !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
+      return res.status(403).json({ error: 'User access denied' });
   }
   next();
 }
@@ -2285,7 +2285,7 @@ app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // Quotation API Routes
-app.get('/api/quotes', requireAuth, requireAdmin, async (_req, res) => {
+app.get('/api/quotes', requireAuth, async (_req, res) => {
   try {
     const quotes = await readQuotations();
     res.json(quotes);
@@ -2294,7 +2294,7 @@ app.get('/api/quotes', requireAuth, requireAdmin, async (_req, res) => {
   }
 });
 
-app.get('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
+app.get('/api/quotes/:id', requireAuth, async (req, res) => {
   try {
     const quotes = await readQuotes();
     const quote = quotes.find((q) => q.id === req.params.id);
@@ -2307,7 +2307,7 @@ app.get('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/quotes', requireAuth, requireAdmin, async (req, res) => {
+app.post('/api/quotes', requireAuth, async (req, res) => {
   try {
     const newQuote = {
       id: generateQuoteId(),
@@ -2330,7 +2330,7 @@ app.post('/api/quotes', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.put('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
+app.put('/api/quotes/:id', requireAuth, async (req, res) => {
   try {
     const quotes = await readQuotes();
     const existing = quotes.find((q) => q.id === req.params.id);
@@ -2358,7 +2358,7 @@ app.put('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
+app.delete('/api/quotes/:id', requireAuth, async (req, res) => {
   try {
     // delete by QuoteId
     await deleteTable(TABLES.quotations, 'QuoteId', req.params.id);
@@ -2368,7 +2368,7 @@ app.delete('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/quotes/:id', requireAuth, requireAdmin, async (req, res) => {
+app.delete('/api/quotes/:id', requireAuth, async (req, res) => {
   try {
     const quotes = await readQuotes();
     const index = quotes.findIndex((q) => q.id === req.params.id);
@@ -2585,7 +2585,7 @@ async function createQuotePDFBuffer(quote) {
 }
 
 // Generate PDF endpoint
-app.get('/api/quotes/:id/pdf', requireAuth, requireAdmin, async (req, res) => {
+app.get('/api/quotes/:id/pdf', requireAuth, async (req, res) => {
   try {
     const quotes = await readQuotes();
     const quote = quotes.find((q) => q.id === req.params.id);

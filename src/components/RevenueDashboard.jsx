@@ -22,7 +22,7 @@ const statusStyles = {
 };
 
 export default function RevenueDashboard() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isDirector } = useAuth();
   const [quotes, setQuotes] = useState([]);
   const [salesLeads, setSalesLeads] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -35,9 +35,9 @@ export default function RevenueDashboard() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!isAdmin) return;
+    //if((!isAdmin === false) || (!isDirector === false)) return;
     loadDashboardData();
-  }, [isAdmin]);
+  }, []);
 
   const loadDashboardData = async () => {    try {
       setLoading(true);

@@ -40,7 +40,7 @@ export function AuthProvider({ children }) {
 
   const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
   const isDirector = currentUser?.role?.toLowerCase() === 'director';
-  const isSalesManager = currentUser?.role?.toLowerCase() === 'salesmanager';
+  const isSalesManager = currentUser?.role?.toLowerCase() === 'manager';
 
   return (
     <AuthContext.Provider
