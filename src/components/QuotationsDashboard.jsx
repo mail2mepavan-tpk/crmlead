@@ -127,24 +127,53 @@ export default function QuotationsDashboard() {
       reader.readAsDataURL(file);
     });
 
-  const handleAttachmentChange = async (event) => {
+  // const handleAttachmentChange = async (event) => {
+  //   const files = Array.from(event.target.files || []);
+  //   if (files.length === 0) return;
+  //   try {
+  //     const newAttachments = await Promise.all(
+  //       files.map(async (file) => ({
+  //         name: file.name,
+  //         contentType: file.type || 'application/octet-stream',
+  //         contentInBase64: await readFileAsBase64(file),
+  //         size: file.size,
+  //       }))
+  //     );
+  //     setAttachments((prev) => [...prev, ...newAttachments]);
+  //   } catch (err) {
+  //     setEmailError('Failed to read attachments.');
+  //   } finally {
+  //     event.target.value = '';
+  //   }
+  // };
+
+  const handleAttachmentChange = (event) => {
     const files = Array.from(event.target.files || []);
-    if (files.length === 0) return;
-    try {
-      const newAttachments = await Promise.all(
-        files.map(async (file) => ({
-          name: file.name,
-          contentType: file.type || 'application/octet-stream',
-          contentInBase64: await readFileAsBase64(file),
-          size: file.size,
-        }))
-      );
-      setAttachments((prev) => [...prev, ...newAttachments]);
-    } catch (err) {
-      setEmailError('Failed to read attachments.');
-    } finally {
-      event.target.value = '';
-    }
+
+    const readFiles = files.map(
+      (file) =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            resolve({
+              name: file.name,
+              contentType: file.type || 'application/octet-stream',
+              contentInBase64: reader.result.split(',')[1],
+            });
+          };
+          reader.onerror = () => reject(new Error(`Unable to read ${file.name}`));
+          reader.readAsDataURL(file);
+        })
+    );
+
+    Promise.all(readFiles)
+      .then((resolvedFiles) => {
+        setAttachments(resolvedFiles);
+        setStatus('Attachments prepared.');
+      })
+      .catch((attachmentError) => {
+        setError(attachmentError.message);
+      });
   };
 
   const removeAttachment = (index) => setAttachments((prev) => prev.filter((_, i) => i !== index));

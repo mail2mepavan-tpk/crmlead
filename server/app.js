@@ -2623,6 +2623,7 @@ app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, re
 
     try {
       const data = req.body || {};
+
       if (!Array.isArray(data.recipients) || data.recipients.length === 0) {
         return res.status(400).json({ error: 'At least one recipient is required' });
       }
@@ -2639,7 +2640,7 @@ app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, re
       const attachmentsDir = path.join(__dirname, '..', 'attachments');
       await fs.mkdir(attachmentsDir, { recursive: true });
 
-      // Save generated quote PDF to attachments folder
+      // // Save generated quote PDF to attachments folder
       const pdfBuffer = await createQuotePDFBuffer(quote);
       const attachmentName = `Quote_${quote.quotation.quoteNumber}.pdf`;
       const pdfFilenameSafe = `${Date.now()}_${attachmentName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
@@ -2657,24 +2658,28 @@ app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, re
         contentInBase64: savedPdfBuffer.toString('base64'),
       });
 
-      // Merge and save additional attachments from request (base64 payloads)
+      //Merge and save additional attachments from request (base64 payloads)
       if (Array.isArray(data.attachments)) {
         for (const a of data.attachments) {
           if (a && typeof a.name === 'string' && typeof a.contentInBase64 === 'string') {
             const safeName = a.name.replace(/[^a-zA-Z0-9._-]/g, '_');
             const filename = `${Date.now()}_${safeName}`;
-            const filePath = path.join(attachmentsDir, filename);
-            // write the decoded base64 buffer to disk
-            await fs.writeFile(filePath, Buffer.from(a.contentInBase64, 'base64'));
-            const fileBuffer = await fs.readFile(filePath);
             attachments.push({
               name: a.name,
-              contentType: a.contentType || 'application/octet-stream',
-              contentInBase64: fileBuffer.toString('base64'),
+              contentType: a.contentType,
+              contentInBase64: a.contentInBase64.toString('base64'),
             });
           }
         }
       }
+
+      //  attachments.push({
+      //         name: 'Enterprise_Quotation.pdf',
+      //         contentType: 'application/pdf',
+      //         contentInBase64: 'JVBERi0xLjQKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2UpCjEgMCBvYmoKPDwKL0YxIDIgMCBSIC9GMiAzIDAgUiAvRjMgNCAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL0Jhc2VGb250IC9IZWx2ZXRpY2EgL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcgL05hbWUgL0YxIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKMyAwIG9iago8PAovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nIC9OYW1lIC9GMiAvU3VidHlwZSAvVHlwZTEgL1R5cGUgL0ZvbnQKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0Jhc2VGb250IC9aYXBmRGluZ2JhdHMgL05hbWUgL0YzIC9TdWJ0eXBlIC9UeXBlMSAvVHlwZSAvRm9udAo+PgplbmRvYmoKNSAwIG9iago8PAovQ29udGVudHMgOSAwIFIgL01lZGlhQm94IFsgMCAwIDU5NS4yNzU2IDg0MS44ODk4IF0gL1BhcmVudCA4IDAgUiAvUmVzb3VyY2VzIDw8Ci9Gb250IDEgMCBSIC9Qcm9jU2V0IFsgL1BERiAvVGV4dCAvSW1hZ2VCIC9JbWFnZUMgL0ltYWdlSSBdCj4+IC9Sb3RhdGUgMCAvVHJhbnMgPDwKCj4+IAogIC9UeXBlIC9QYWdlCj4+CmVuZG9iago2IDAgb2JqCjw8Ci9QYWdlTW9kZSAvVXNlTm9uZSAvUGFnZXMgOCAwIFIgL1R5cGUgL0NhdGFsb2cKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL0F1dGhvciAoXChhbm9ueW1vdXNcKSkgL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDYyMjEzNDQ1MiswMCcwMCcpIC9DcmVhdG9yIChcKHVuc3BlY2lmaWVkXCkpIC9LZXl3b3JkcyAoKSAvTW9kRGF0ZSAoRDoyMDI2MDYyMjEzNDQ1MiswMCcwMCcpIC9Qcm9kdWNlciAoUmVwb3J0TGFiIFBERiBMaWJyYXJ5IC0gXChvcGVuc291cmNlXCkpIAogIC9TdWJqZWN0IChcKHVuc3BlY2lmaWVkXCkpIC9UaXRsZSAoXChhbm9ueW1vdXNcKSkgL1RyYXBwZWQgL0ZhbHNlCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9Db3VudCAxIC9LaWRzIFsgNSAwIFIgXSAvVHlwZSAvUGFnZXMKPj4KZW5kb2JqCjkgMCBvYmoKPDwKL0ZpbHRlciBbIC9BU0NJSTg1RGVjb2RlIC9GbGF0ZURlY29kZSBdIC9MZW5ndGggMTEwNAo+PgpzdHJlYW0KR2F0bTo/I3VIIidSZTwyXDFhNykpKV88MT01U2ZnLjtgTi1VJDUzV1tebz02IUsxX1RwPUZMKU9JdVloQ14xXWZIZ1tLQ0VwZEtuK0VjVy9HN2pwXSMmblJBIT4+YTEhNCtrQWkiaCdgYWNAKj8rPiJOYExBU0ZIZklCNXRUUFBhQVNaI2R1OjhcXkwyJi0uLmxfdDA7JzJjKVMmbjdwIz9qW3ErKklmLFVFOWdkP3JJSG1JJT5JKCVPMWUlQihvbE1iKENbTG0rRiZZISotc103OSRgLE5GdUE2ZkJPXVpeZmloPGUoZV11RGRyNlZrQEBdcUFfXisrMGVoTlImL1hjPGYvPkZDdUxSVnNwUz81LFQhLDJVQFJGIUNOQD9lRkpmWCZWW1RmVixncUE3KjomYUtMLkhMXnUtWCQiO3JCKzdwSU1GLy0ybC50bChPISVvPyREPlwsIVhAdFU5SG9UPztMZSR0V1dQXlFqVm85NDxkS0BZViwqZzNPI01qXE81QWdUcF8tbllUQzFVS2ojYWBsVjZ0Pyo7c1AzOG9oREkrJT8iOUpwMis3biIyaytAM0I6LFNlLSpaV2NyODRhIlsmQEVxIyFSI0laJGZtam1HaGM8OFcvRm11TldoaSFQLiYoZi0kZipeYEkpSEI9VSNOKjBVUmEuXDFgMW45QUouIjEnZSQ8TkYlKlFuWShXISYsS2xdZlVHT2IqKXBVKXAtSDE1Ik4pVjkkXjVbO3ImbU1AIU9DJGU2Vz87cihvS0wybUJJPVIhV1FjSj5sRW9OXzdjWEVob2thbjBsc0gjJy05OlR0TiQ9Zzg2QmRSP11UOyJMQ3NLXW9kZzNUITtfXG9uSVg/TSZgPTpEXyVWb21KSC80aGFkQ0lWayZkQV8ncCEkaDFKPi5SSWVyO00hbl0jQzM9b25zSSMwQGs+WyokQjEnL1ZVJHAzQFI8dGBPOz9OVlJhMDknYiVmOVVKcCYjWjMsQkZkTTxjKWJnTkYhOTI4JjBbbE1xQFYqRlNoPzJITClAW19WcShOTnNPQnInNDZpW1NOQUI3OHJDJV5TXkVbWE5SJyNvLm1nSUdzJGVIRFAyakQ+KFA2Z0VKbzVTVkBBLV9NbEtvLzNqYGYzVSQpWVphaWQ7LVUtaFQ+PUQ7SmNqTjc3JyxoSTojM0NfSXVMMDtRNyxPWUBTJyFZRjcwb100aDAyaHREIWhdSlFuTy5LWClkaGU6aSVsRm8uZ2FCVUd0UU1gb2BgWyNBK3BkQEBNL1NSa20lKC0+WU5iLVJRVi9IUklFWSRuI0tJbW0rPG5FNTdhKygwVjYqZ2NJODJbPVdVV0dUPyZsc1puJnBtZHQ9RVVvQkpmNFBUL1NdV1JcVXVTdHQ9YDBhMGUzYEVYYlNWRy4zJD9mLGw/OVJHbV1jaFY7c0ljbXUrSzAsIi9HcDtvW2ZjdS01NTY6L3UvLX4+ZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgMTAKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDYxIDAwMDAwIG4gCjAwMDAwMDAxMTIgMDAwMDAgbiAKMDAwMDAwMDIxOSAwMDAwMCBuIAowMDAwMDAwMzMxIDAwMDAwIG4gCjAwMDAwMDA0MTQgMDAwMDAgbiAKMDAwMDAwMDYxNyAwMDAwMCBuIAowMDAwMDAwNjg1IDAwMDAwIG4gCjAwMDAwMDA5NjUgMDAwMDAgbiAKMDAwMDAwMTAyNCAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9JRCAKWzw3ZjVhOGI1YzQxYWNlMGQzNjkyZWFhMmM4MWEyNjQ0Nj48N2Y1YThiNWM0MWFjZTBkMzY5MmVhYTJjODFhMjY0NDY+XQolIFJlcG9ydExhYiBnZW5lcmF0ZWQgUERGIGRvY3VtZW50IC0tIGRpZ2VzdCAob3BlbnNvdXJjZSkKCi9JbmZvIDcgMCBSCi9Sb290IDYgMCBSCi9TaXplIDEwCj4+CnN0YXJ0eHJlZgoyMjE5CiUlRU9GCg==',
+      //   });
+
+     // console.log('Email Attachments:', attachments);
 
       const emailMessage = {
         senderAddress: 'DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net',
@@ -2682,25 +2687,16 @@ app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, re
           subject: emailSubject,
           plainText,
           html: htmlText,
-          attachments: attachments,
         },
         recipients: { to: toRecipients },
+        attachments: attachments,
       };
 
-      if (typeof emailClient.send === 'function') {
-        await emailClient.send(emailMessage);
-      } else if (typeof emailClient.sendEmail === 'function') {
-        await emailClient.sendEmail(emailMessage);
-      } else if (typeof emailClient.beginSend === 'function') {
-        const poller = await emailClient.beginSend(emailMessage);
-        if (poller && typeof poller.pollUntilDone === 'function') {
-          await poller.pollUntilDone();
-        }
-      } else {
-        console.warn('No supported send method found on emailClient; email not sent');
-      }
+      const poller = await emailClient.beginSend(emailMessage);
+      await poller.pollUntilDone();
 
       res.json({ success: true, message: `Email sent to ${toRecipients.length} recipient(s)` });
+
     } catch (emailError) {
       console.error('Email sending error:', emailError);
       res.status(500).json({ error: 'Failed to send email: ' + emailError.message });
