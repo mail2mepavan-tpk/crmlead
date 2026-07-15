@@ -44,7 +44,7 @@ export default function QuotationsDashboard() {
   const [emailError, setEmailError] = useState('');
 
   useEffect(() => {
-    if(sessionStorage.getItem('crm_current_user') && JSON.parse(sessionStorage.getItem('crm_current_user')).role.toLowerCase() === 'executive') return;
+    //if(sessionStorage.getItem('crm_current_user') && JSON.parse(sessionStorage.getItem('crm_current_user')).role.toLowerCase() === 'executive') return;
     loadQuotes();
   }, []);
 

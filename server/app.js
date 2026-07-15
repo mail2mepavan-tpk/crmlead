@@ -2604,7 +2604,7 @@ app.get('/api/quotes/:id/pdf', requireAuth, async (req, res) => {
 });
 
 // Send email endpoint
-app.post('/api/quotes/:id/send-email', requireAuth, requireAdmin, async (req, res) => {
+app.post('/api/quotes/:id/send-email', requireAuth, async (req, res) => {
   try {
     const quotes = await readQuotes();
     const quote = quotes.find((q) => q.id === req.params.id);

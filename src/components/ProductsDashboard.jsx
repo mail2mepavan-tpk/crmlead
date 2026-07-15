@@ -57,11 +57,23 @@ export default function ProductsDashboard() {
     }
   };
 
+  const getExcelValue = (row, keys) => {
+    for (const key of keys) {
+      const value = row?.[key];
+      if (value !== undefined && value !== null && value !== '') {
+        return value;
+      }
+    }
+    return '';
+  };
+
   const handleExportExcel = () => {
     const data = products.map((product) => ({
       productCode: product.productCode || '',
       productName: product.productName || '',
       productDesciption: product.productDesciption || '',
+      unitMeasurements: product.unitMeasurements || '',
+      salePrice: product.salePrice === '' || product.salePrice == null ? '' : Number(product.salePrice),
       createdBy: product.createdBy || '',
       createdDate: product.createdDate || '',
       updatedBy: product.updatedBy || '',
@@ -90,13 +102,15 @@ export default function ProductsDashboard() {
       }
 
       const importedProducts = rows.map((row, index) => ({
-        productCode: row.productCode || row.ProductCode || `AUTO-${index + 1}`,
-        productName: row.productName || row.ProductName || '',
-        productDesciption: row.productDesciption || row.productDescription || row.ProductDesciption || '',
-        createdBy: row.createdBy || row.CreatedBy || 'System',
-        createdDate: row.createdDate || row.CreatedDate || new Date().toISOString(),
-        updatedBy: row.updatedBy || row.UpdatedBy || 'System',
-        updatedDate: row.updatedDate || row.UpdatedDate || new Date().toISOString(),
+        productCode: getExcelValue(row, ['productCode', 'ProductCode', 'code', 'Code']) || `AUTO-${index + 1}`,
+        productName: getExcelValue(row, ['productName', 'ProductName', 'name', 'Name']) || '',
+        productDesciption: getExcelValue(row, ['productDesciption', 'productDescription', 'ProductDesciption', 'description', 'Description']) || '',
+        unitMeasurements: getExcelValue(row, ['unitMeasurements', 'UnitMeasurements', 'unitMeasurement', 'UnitMeasurement', 'measurement', 'Measurements']) || '',
+        salePrice: getExcelValue(row, ['salePrice', 'SalePrice', 'saleprice', 'unitPrice', 'UnitPrice', 'price', 'Price']) || '',
+        createdBy: getExcelValue(row, ['createdBy', 'CreatedBy']) || 'System',
+        createdDate: getExcelValue(row, ['createdDate', 'CreatedDate']) || new Date().toISOString(),
+        updatedBy: getExcelValue(row, ['updatedBy', 'UpdatedBy']) || 'System',
+        updatedDate: getExcelValue(row, ['updatedDate', 'UpdatedDate']) || new Date().toISOString(),
       }));
 
       for (const product of importedProducts) {
@@ -193,6 +207,8 @@ export default function ProductsDashboard() {
                     <th className="px-4 py-4">Code</th>
                     <th className="px-4 py-4">Name</th>
                     <th className="px-4 py-4">Description</th>
+                    <th className="px-4 py-4">Unit Measurements</th>
+                    <th className="px-4 py-4">Sale Price</th>
                     <th className="px-4 py-4">Created By</th>
                     <th className="px-4 py-4 text-center">Actions</th>
                   </tr>
@@ -203,6 +219,8 @@ export default function ProductsDashboard() {
                       <td className="px-4 py-4 font-semibold text-slate-900">{product.productCode || '—'}</td>
                       <td className="px-4 py-4 text-slate-700">{product.productName || '—'}</td>
                       <td className="px-4 py-4 text-slate-600">{product.productDesciption || '—'}</td>
+                      <td className="px-4 py-4 text-slate-600">{product.unitMeasurements || '—'}</td>
+                      <td className="px-4 py-4 text-slate-600">{product.salePrice === '' || product.salePrice == null ? '—' : `₹${Number(product.salePrice).toLocaleString('en-IN')}`}</td>
                       <td className="px-4 py-4 text-slate-600">{product.createdBy || '—'}</td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap items-center justify-center gap-2">

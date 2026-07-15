@@ -116,8 +116,7 @@ export default function Sidebar({ isOpen, onClose }) {
               label="Contacts"
             />
           </div>
-          {(isDirector || isAdmin || isSalesManager) && (
-            <> <SectionLabel>Sales Quotes</SectionLabel>
+          <SectionLabel>Sales Quotes</SectionLabel>
               <div className="flex flex-col gap-0.5">
               <NavItem
                   to="/quotations"
@@ -125,8 +124,7 @@ export default function Sidebar({ isOpen, onClose }) {
                   icon={FileText}
                   label="Quotations"
                 />
-          </div></>
-          )}
+          </div>
 
            {(isDirector || isAdmin) && (
             <> <SectionLabel>Sales Trends</SectionLabel>
