@@ -38,7 +38,7 @@ export default function SalesLeadsDashboard() {
       const data = await getSalesLeads();
       var filteredData = data;
       if (JSON.parse(sessionStorage.getItem('crm_current_user'))?.role?.toLowerCase() === 'executive') {
-       filteredData = data.filter((lead) => lead.createdBy.toLowerCase() === JSON.parse(sessionStorage.getItem('crm_current_user')).username.toLowerCase());
+       filteredData = data.filter((lead) => lead.createdBy.toLowerCase() === JSON.parse(sessionStorage.getItem('crm_current_user')).fullName.toLowerCase());
       }
       setLeads(filteredData);
       setSummary(getSalesLeadsSummary(filteredData));
