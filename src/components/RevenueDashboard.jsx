@@ -199,6 +199,12 @@ export default function RevenueDashboard() {
       return acc;
     }, {});
 
+    const productSubTypeCounts = filteredDeals.reduce((acc, deal) => {
+      const subtype = deal.productSubType || 'Unknown';
+      acc[subtype] = (acc[subtype] || 0) + 1;
+      return acc;
+    }, {});
+
     const dealAmounts = filteredDeals
       .map((deal) => Number(deal.dealAmount) || 0)
       .filter((amount) => amount > 0);
@@ -219,6 +225,7 @@ export default function RevenueDashboard() {
       stageCounts,
       regionCounts,
       sourceCounts,
+      productSubTypeCounts,
       totalDealAmount,
       averageDealAmount,
       highestDealAmount,
@@ -544,8 +551,8 @@ export default function RevenueDashboard() {
                 chip: 'bg-amber-50 text-amber-700',
               },
               {
-                title: 'Probability',
-                data: [[ 'Average', `${dealStats.averageProbability.toFixed(1)}%` ]],
+                title: 'Product Subtype',
+                data: Object.entries(dealStats.productSubTypeCounts).slice(0, 4),
                 accent: 'from-rose-500 to-pink-400',
                 chip: 'bg-rose-50 text-rose-700',
               },

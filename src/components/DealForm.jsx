@@ -27,6 +27,7 @@ const emptyForm = () => ({
   expectedClosureDate: '',
   competitor: '',
   dealSource: '',
+  productSubType: '',
   description: '',
   lostReason: '',
   wonDate: '',
@@ -43,6 +44,7 @@ const emptyForm = () => ({
 });
 
 const stageOptions = ['New', 'Qualification', 'Proposal', 'Negotiation', 'Final Review', 'Won', 'Lost', 'Hold'];
+const productSubTypeOptions = ['Hardware-1', 'Hardware-2', 'Hardware-3', 'Consumables-1', 'Consumables-2'];
 const stageProbability = {
   Qualification: 10,
   Proposal: 30,
@@ -108,6 +110,7 @@ export default function DealForm() {
             expectedClosureDate: deal.expectedClosureDate || '',
             competitor: deal.competitor || '',
             dealSource: deal.dealSource || '',
+            productSubType: deal.productSubType || '',
             description: deal.description || '',
             lostReason: deal.lostReason || '',
             wonDate: deal.wonDate || '',
@@ -203,6 +206,7 @@ export default function DealForm() {
       account: formData.account.trim(),
       salesPoc: formData.salesPoc.trim(),
       probability: Number(formData.probability) || 0,
+      productSubType: formData.productSubType.trim(),
       createdBy: formData.createdBy || currentUser?.fullName || currentUser?.username || 'System',
       createdDate: formData.createdDate || new Date().toISOString(),
       updatedBy: currentUser?.fullName || currentUser?.username || 'System',
@@ -347,6 +351,21 @@ export default function DealForm() {
                     <label className="text-sm font-semibold text-slate-800">Probability %</label>
                     <input name="probability" type="number" value={formData.probability} onChange={handleChange} className={fieldClass(false)} />
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-semibold text-slate-800">Product Subtype</label>
+                  <select
+                    name="productSubType"
+                    value={formData.productSubType}
+                    onChange={handleChange}
+                    className={fieldClass(false)}
+                  >
+                    <option value="">Select subtype</option>
+                    {productSubTypeOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="grid gap-5 sm:grid-cols-2">

@@ -121,6 +121,38 @@ function normalizeRow(row) {
   return normalized;
 }
 
+function getUniqueColumnEntries(values) {
+  const seenColumns = new Set();
+  const entries = [];
+
+  for (const [columnName, value] of Object.entries(values)) {
+    const normalizedName = String(columnName).trim().toLowerCase();
+    if (seenColumns.has(normalizedName)) {
+      continue;
+    }
+
+    seenColumns.add(normalizedName);
+    entries.push([columnName, value]);
+  }
+
+  return entries;
+}
+
+function createSqlBindings(request, values) {
+  const bindings = [];
+  let index = 0;
+
+  for (const [columnName, value] of getUniqueColumnEntries(values)) {
+    const paramName = `p${index}`;
+    index += 1;
+
+    request.input(paramName, serializeValue(normalizeColumnValue(columnName, value)));
+    bindings.push({ columnName, paramName });
+  }
+
+  return bindings;
+}
+
 async function queryDb(query, params = {}) {
   const pool = await getDbPool();
   const request = pool.request();
@@ -147,18 +179,15 @@ async function  writeTable(tableName, rows) {
     await transaction.begin();
 
     for (const row of rows) {
-      const columns = Object.keys(row);
-      if (columns.length === 0) {
+      const columnEntries = getUniqueColumnEntries(row);
+      if (columnEntries.length === 0) {
         continue;
       }
-      const columnList = columns.map((name) => `[${name}]`).join(', ');
-      const valueList = columns.map((name) => `@${name}`).join(', ');
-      const query = `INSERT INTO ${tableName} (${columnList}) VALUES (${valueList})`;
+      const columnList = columnEntries.map(([name]) => `[${name}]`).join(', ');
       const insertRequest = transaction.request();
-      for (const [name, value] of Object.entries(row)) {
-        const normalized = normalizeColumnValue(name, value);
-        insertRequest.input(name, serializeValue(normalized));
-      }
+      const bindings = createSqlBindings(insertRequest, Object.fromEntries(columnEntries));
+      const valueList = bindings.map((binding) => `@${binding.paramName}`).join(', ');
+      const query = `INSERT INTO ${tableName} (${columnList}) VALUES (${valueList})`;
       await insertRequest.query(query);
     }
 
@@ -208,27 +237,26 @@ async function writeUpdate(tableName, row) {
 
     if (exists) {
       // build update for all columns except key
-      const columns = Object.keys(row).filter((c) => String(c) !== String(keyName));
-      if (columns.length > 0) {
-        const setClauses = columns.map((c) => `[${c}] = @${c}`).join(', ');
+      const columnEntries = getUniqueColumnEntries(
+        Object.fromEntries(
+          Object.entries(row).filter(([columnName]) => String(columnName).toLowerCase() !== String(keyName).toLowerCase())
+        )
+      );
+      if (columnEntries.length > 0) {
         const updateReq = transaction.request();
         updateReq.input('key', serializeValue(keyValue));
-        for (const col of columns) {
-          const normalized = normalizeColumnValue(col, row[col]);
-          updateReq.input(col, serializeValue(normalized));
-        }
+        const columnValues = Object.fromEntries(columnEntries);
+        const bindings = createSqlBindings(updateReq, columnValues);
+        const setClauses = bindings.map((binding) => `[${binding.columnName}] = @${binding.paramName}`).join(', ');
         await updateReq.query(`UPDATE ${tableName} SET ${setClauses} WHERE [${keyName}] = @key`);
       }
     } else {
       // insert single row
-      const columns = Object.keys(row);
-      const columnList = columns.map((name) => `[${name}]`).join(', ');
-      const valueList = columns.map((name) => `@${name}`).join(', ');
+      const columnEntries = getUniqueColumnEntries(row);
+      const columnList = columnEntries.map(([name]) => `[${name}]`).join(', ');
       const insertReq = transaction.request();
-      for (const [name, value] of Object.entries(row)) {
-        const normalized = normalizeColumnValue(name, value);
-        insertReq.input(name, serializeValue(normalized));
-      }
+      const bindings = createSqlBindings(insertReq, Object.fromEntries(columnEntries));
+      const valueList = bindings.map((binding) => `@${binding.paramName}`).join(', ');
       await insertReq.query(`INSERT INTO ${tableName} (${columnList}) VALUES (${valueList})`);
     }
 
@@ -1068,6 +1096,7 @@ function parseDealBody(body) {
     expectedClosureDate: body.expectedClosureDate || '',
     competitor: body.competitor?.trim() || '',
     dealSource: body.dealSource?.trim() || '',
+    productSubType: body.productSubType?.trim() || '',
     description: body.description?.trim() || '',
     lostReason: body.lostReason?.trim() || '',
     wonDate: body.wonDate || '',
@@ -1115,6 +1144,7 @@ function buildDealRecord(data, existing = {}) {
     expectedClosureDate: data.expectedClosureDate,
     competitor: data.competitor,
     dealSource: data.dealSource,
+    productSubType: data.productSubType,
     description: data.description,
     lostReason: data.lostReason,
     wonDate: data.wonDate,
