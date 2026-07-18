@@ -38,6 +38,7 @@ const TABLES = {
   leadSources: 'LeadSources',
   emailGroups: 'EmailGroups',
   quotations: 'Quotations',
+  salesOrders: 'SalesOrders',
   products: 'Products',
 };
 
@@ -333,6 +334,43 @@ const readQuotations = readQuotes;
 const writeQuotations = async (data) => writeQuotes(data);
 const updateQuotations = (row) => writeUpdate(TABLES.quotations, row);
 const deleteQuotations = (id) => deleteTable(TABLES.quotations, 'QuoteId', id);
+
+// Sales Orders storage (JSON payload stored in SalesOrders table)
+async function readSalesOrders() {
+  try {
+    const rows = await queryDb(`SELECT SalesOrderId, SalesOrderJson, CreatedDate, UpdatedDate FROM ${TABLES.salesOrders}`);
+    return rows.map((r) => {
+      const parsed = safeParseJson(r.SalesOrderJson);
+      const orderObj = typeof parsed === 'object' ? parsed : safeParseJson(String(r.SalesOrderJson || '{}'));
+      const result = { ...(orderObj || {}), id: r.SalesOrderId };
+      if (r.CreatedDate) result.createdAt = new Date(r.CreatedDate).toISOString();
+      if (r.UpdatedDate) result.updatedAt = new Date(r.UpdatedDate).toISOString();
+      return result;
+    });
+  } catch (error) {
+    console.error('readSalesOrders error:', error && error.message ? error.message : error);
+    return [];
+  }
+}
+
+async function writeSalesOrders(orders) {
+  for (const o of orders) {
+    const SalesOrderId = o.id || o.SalesOrderId || generateSalesOrderId();
+    const SalesOrderJson = typeof o === 'string' ? o : JSON.stringify(o);
+    const row = {
+      SalesOrderId,
+      SalesOrderJson,
+      UpdatedDate: new Date().toISOString(),
+    };
+    if (o.createdAt) row.CreatedDate = new Date(o.createdAt);
+    await writeUpdate(TABLES.salesOrders, row);
+  }
+}
+
+const readSalesOrdersTable = readSalesOrders;
+const writeSalesOrdersTable = writeSalesOrders;
+const updateSalesOrders = (row) => writeUpdate(TABLES.salesOrders, row);
+const deleteSalesOrders = (id) => deleteTable(TABLES.salesOrders, 'SalesOrderId', id);
 const readProducts = () => readTable(TABLES.products);
 const writeProducts = (data) => writeTable(TABLES.products, data);
 const updateProducts = (row) => writeUpdate(TABLES.products, row);
@@ -374,6 +412,12 @@ async function writeQuotes(quotes) {
 
 function generateQuoteId() {
   return 'Q' + Date.now() + Math.random().toString(36).substr(2, 9);
+}
+
+function generateSalesOrderId() {
+  // Format AUR-2XXXXX where XXXXX is 5 digits
+  const num = Math.floor(10000 + Math.random() * 90000);
+  return `AUR-2${String(num)}`;
 }
 
 const AZURE_EMAIL_CONNECTION_STRING = appSettings.azure?.email?.connectionString || '';
@@ -1436,7 +1480,60 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    res.json(sanitizeUser(user));
+    // Helper to coerce different representations to boolean
+    const toBool = (v) => {
+      if (v === true) return true;
+      if (v === false) return false;
+      if (v === undefined || v === null) return false;
+      const s = String(v).trim().toLowerCase();
+      return s === 'true' || s === '1';
+    };
+
+    // If user is already active on another device, deny login
+    if (toBool(user.IsActive) || toBool(user.isActive) || toBool(user.is_active)) {
+      return res.status(403).json({ error: "This User is already logged-in on another device, please log-out and re-attempt to login-in here again." });
+    }
+
+    // Mark user as active and set LoggedIn timestamp
+    const now = new Date().toISOString();
+
+    // Choose the primary key field that exists on the user record
+    const updatePayload = {};
+    if (Object.prototype.hasOwnProperty.call(user, 'id')) updatePayload.id = user.id;
+    else if (Object.prototype.hasOwnProperty.call(user, 'Id')) updatePayload.Id = user.Id;
+    else if (Object.prototype.hasOwnProperty.call(user, 'ID')) updatePayload.ID = user.ID;
+    else updatePayload.id = user.id ?? Date.now();
+
+    updatePayload.IsActive = true;
+    updatePayload.LoggedIn = now;
+
+    await updateUsers(updatePayload);
+
+    // Return the refreshed user record (sanitized)
+    const refreshed = await readUsers();
+    const updatedUser = refreshed.find((u) => {
+      if (updatePayload.id !== undefined) return String(u.id) === String(updatePayload.id);
+      if (updatePayload.Id !== undefined) return String(u.Id) === String(updatePayload.Id);
+      if (updatePayload.ID !== undefined) return String(u.ID) === String(updatePayload.ID);
+      return false;
+    }) || { ...user, IsActive: true, LoggedIn: now };
+
+    res.json(sanitizeUser(updatedUser));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Logout: clear IsActive and optionally set LoggedOut time
+app.post('/api/auth/logout', requireAuth, async (req, res) => {
+  try {
+    const userId = req.authUser?.id;
+    if (!userId) return res.status(400).json({ error: 'Invalid user' });
+
+    const now = new Date().toISOString();
+    const payload = { id: userId, IsActive: false, LoggedOut: now };
+    await updateUsers(payload);
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -2398,6 +2495,141 @@ app.delete('/api/quotes/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Convert a quotation to a sales order
+app.post('/api/quotes/:id/convert-to-sales-order', requireAuth, async (req, res) => {
+  try {
+    const quotes = await readQuotes();
+    const quote = quotes.find((q) => q.id === req.params.id);
+    if (!quote) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    // Map quotation JSON to sales order JSON
+    const salesOrderId = generateSalesOrderId();
+    const now = new Date().toISOString();
+
+    const salesOrder = {
+      id: salesOrderId,
+      // Basic metadata
+      createdAt: now,
+      updatedAt: now,
+      // Copy over top-level relevant sections
+      company: quote.company || {},
+      customer: quote.customer || {},
+      items: quote.items || [],
+      commercials: quote.commercials || {},
+      taxes: quote.taxes || {},
+      totals: quote.totals || {},
+      bankDetails: quote.bankDetails || {},
+      signature: quote.signature || {},
+      status: quote.status || 'Pending',
+      // Map quotation.quotation -> salesOrder.salesOrder
+      salesOrder: {
+        salesOrderNumber: salesOrderId,
+        orderType: quote.quotation?.quoteType || 'Initial',
+        salesOrderDate: quote.quotation?.quotationDate || now.split('T')[0],
+        deliveryDate: quote.quotation?.expiryDate || '',
+        placeOfSupply: quote.quotation?.placeOfSupply || '',
+        reference: quote.quotation?.reference || '',
+        salesPerson: quote.quotation?.salesPerson || {},
+      },
+    };
+
+    await writeUpdate(TABLES.salesOrders, {
+      SalesOrderId: salesOrder.id,
+      SalesOrderJson: JSON.stringify(salesOrder),
+      CreatedDate: new Date(salesOrder.createdAt),
+      UpdatedDate: new Date(salesOrder.updatedAt),
+    });
+
+    res.status(201).json(salesOrder);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Sales Orders API Routes
+app.get('/api/sales-orders', requireAuth, async (_req, res) => {
+  try {
+    const orders = await readSalesOrders();
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/sales-orders/:id', requireAuth, async (req, res) => {
+  try {
+    const orders = await readSalesOrders();
+    const order = orders.find((q) => q.id === req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Sales order not found' });
+    }
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/sales-orders', requireAuth, async (req, res) => {
+  try {
+    const newOrder = {
+      id: generateSalesOrderId(),
+      ...req.body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await writeUpdate(TABLES.salesOrders, {
+      SalesOrderId: newOrder.id,
+      SalesOrderJson: JSON.stringify(newOrder),
+      CreatedDate: new Date(newOrder.createdAt),
+      UpdatedDate: new Date(newOrder.updatedAt),
+    });
+
+    res.status(201).json(newOrder);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/sales-orders/:id', requireAuth, async (req, res) => {
+  try {
+    const orders = await readSalesOrders();
+    const existing = orders.find((q) => q.id === req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Sales order not found' });
+    }
+
+    const updated = {
+      ...existing,
+      ...req.body,
+      id: existing.id,
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await writeUpdate(TABLES.salesOrders, {
+      SalesOrderId: updated.id,
+      SalesOrderJson: JSON.stringify(updated),
+      UpdatedDate: new Date(updated.updatedAt),
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/sales-orders/:id', requireAuth, async (req, res) => {
+  try {
+    await deleteTable(TABLES.salesOrders, 'SalesOrderId', req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/api/quotes/:id', requireAuth, async (req, res) => {
   try {
     const quotes = await readQuotes();
@@ -2419,7 +2651,7 @@ async function createQuotePDFBuffer(quote) {
       const doc = new PDFDocument({ margin: 40, size: 'A4' });
       const chunks = [];
       doc.on('data', (chunk) => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('end', () => resolve(globalThis.Buffer ? globalThis.Buffer.concat(chunks) : Buffer.concat(chunks)));
       doc.on('error', reject);
 
       // HEADER SECTION
@@ -2735,6 +2967,409 @@ app.post('/api/quotes/:id/send-email', requireAuth, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+async function createSalesOrderPDFBuffer(order) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const chunks = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(globalThis.Buffer ? globalThis.Buffer.concat(chunks) : Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      doc.image('./src/assets/aaruni.png', 50, 30, { width: 60, height: 30, align: 'right' });
+      doc.fontSize(12).font('Helvetica-Bold').text(order.company?.name || 'Aaruni Lifesciences', 120, 40);
+      doc.fontSize(9).font('Helvetica').text(order.company?.address || '', 50, 65);
+      doc.fontSize(9).text(`Phone: ${order.salesOrder?.salesPerson?.phone || ''} | GSTIN: ${order.company?.gstin || ''}`, 50, 80);
+      doc.fontSize(9).text(`CIN: ${order.company?.companyId || ''}`, 50, 95);
+
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#C0C0C0').text('SALES ORDER', 380, 40, {
+        align: 'right',
+        opacity: 0.1,
+      });
+      doc.fillColor('black');
+
+      doc.moveDown(1);
+      doc.moveTo(50, 110).lineTo(550, 110).stroke();
+      doc.moveDown(0.5);
+
+      const infoBoxLeft = 50;
+      const infoBoxRight = 310;
+      const infoBoxWidth = 240;
+      const infoBoxHeight = 55;
+      const infoBoxTop = 120;
+
+      doc.rect(infoBoxLeft, infoBoxTop, infoBoxWidth, infoBoxHeight).stroke();
+      doc.fontSize(9).font('Helvetica-Bold').text('ORDER DETAILS', infoBoxLeft + 8, infoBoxTop + 5, { width: infoBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Order #: ${order.salesOrder?.salesOrderNumber || order.id}`, infoBoxLeft + 8, infoBoxTop + 20, { width: infoBoxWidth - 16 });
+      doc.text(`Type: ${order.salesOrder?.orderType || ''} | Date: ${order.salesOrder?.salesOrderDate ? new Date(order.salesOrder.salesOrderDate).toLocaleDateString('en-IN') : ''}`, infoBoxLeft + 8, infoBoxTop + 33, { width: infoBoxWidth - 16 });
+      doc.text(`Delivery: ${order.salesOrder?.deliveryDate ? new Date(order.salesOrder.deliveryDate).toLocaleDateString('en-IN') : ''}`, infoBoxLeft + 8, infoBoxTop + 43, { width: infoBoxWidth - 16 });
+
+      doc.rect(infoBoxRight, infoBoxTop, infoBoxWidth, infoBoxHeight).stroke();
+      doc.fontSize(9).font('Helvetica-Bold').text('REFERENCE', infoBoxRight + 8, infoBoxTop + 5, { width: infoBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Reference: ${order.salesOrder?.reference || ''}`, infoBoxRight + 8, infoBoxTop + 20, { width: infoBoxWidth - 16 });
+      doc.text(`Place of Supply: ${order.salesOrder?.placeOfSupply || ''}`, infoBoxRight + 8, infoBoxTop + 33, { width: infoBoxWidth - 16 });
+      doc.text(`Sales Person: ${order.salesOrder?.salesPerson?.name || ''}`, infoBoxRight + 8, infoBoxTop + 43, { width: infoBoxWidth - 16 });
+
+      doc.moveDown(1);
+
+      const addressBoxWidth = 240;
+      const addressBoxHeight = 95;
+      const addressBoxY = doc.y;
+      const addressBoxLeft = 50;
+      const addressBoxRight = 310;
+
+      doc.rect(addressBoxLeft, addressBoxY, addressBoxWidth, addressBoxHeight).stroke();
+      doc.fontSize(10).font('Helvetica-Bold').text('BILL TO', addressBoxLeft + 8, addressBoxY + 5);
+      doc.fontSize(9).font('Helvetica-Bold').text(order.customer?.billTo?.companyName || order.customer?.customerName || '', addressBoxLeft + 8, addressBoxY + 20, { width: addressBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      (order.customer?.billTo?.address || []).forEach((line, idx) => {
+        doc.text(line, addressBoxLeft + 8, addressBoxY + 33 + idx * 10, { width: addressBoxWidth - 16 });
+      });
+      doc.fontSize(8).font('Helvetica-Bold');
+      doc.text(`Contact: ${order.customer?.customerName || ''}`, addressBoxLeft + 8, addressBoxY + 73, { width: addressBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Email: ${order.customer?.email || ''}`, addressBoxLeft + 8, addressBoxY + 83, { width: addressBoxWidth - 16 });
+
+      doc.rect(addressBoxRight, addressBoxY, addressBoxWidth, addressBoxHeight).stroke();
+      doc.fontSize(10).font('Helvetica-Bold').text('SHIP TO', addressBoxRight + 8, addressBoxY + 5);
+      doc.fontSize(9).font('Helvetica-Bold').text(order.customer?.shipTo?.companyName || '', addressBoxRight + 8, addressBoxY + 20, { width: addressBoxWidth - 16 });
+      doc.fontSize(8).font('Helvetica');
+      (order.customer?.shipTo?.address || []).forEach((line, idx) => {
+        doc.text(line, addressBoxRight + 8, addressBoxY + 33 + idx * 10, { width: addressBoxWidth - 16 });
+      });
+      doc.fontSize(8).font('Helvetica-Bold');
+      doc.text(`Phone: ${order.customer?.phone || ''}`, addressBoxRight + 8, addressBoxY + 73, { width: addressBoxWidth - 16 });
+
+      doc.moveDown(3);
+
+      const tableTop = doc.y;
+      const col1 = 50,
+        col2 = 110,
+        col3 = 240,
+        col4 = 320,
+        col5 = 390,
+        col6 = 460;
+      const rowHeight = 25;
+      const pageWidth = 550;
+
+      doc.rect(col1 - 5, tableTop, pageWidth - col1 + 5, rowHeight).fillAndStroke('#2c3e50', '#2c3e50');
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('white');
+      doc.text('Item Code', col1, tableTop + 4, { width: 50 });
+      doc.text('Product', col2, tableTop + 4, { width: 120 });
+      doc.text('Qty', col3, tableTop + 4, { width: 50, align: 'center' });
+      doc.text('Unit Price (₹)', col4, tableTop + 4, { width: 60, align: 'right' });
+      doc.text('Discount', col5, tableTop + 4, { width: 50, align: 'center' });
+      doc.text('Total (₹)', col6, tableTop + 4, { width: 60, align: 'right' });
+
+      doc.fillColor('black');
+      let currentY = tableTop + rowHeight;
+      let rowNum = 0;
+
+      (order.items || []).forEach((item) => {
+        if (rowNum % 2 === 0) {
+          doc.rect(col1 - 5, currentY, pageWidth - col1 + 5, rowHeight).fill('#f5f5f5');
+        }
+
+        const productLabel = item.description || item.productName || '-';
+        const unitDetails = item.unitMeasurements ? ` (${item.unitMeasurements})` : '';
+
+        doc.fontSize(8).font('Helvetica').fillColor('black');
+        doc.text(item.itemCode || '-', col1, currentY + 4, { width: 50 });
+        doc.text(`${productLabel}${unitDetails}`, col2, currentY + 4, { width: 120 });
+        doc.text(String(item.quantity || 0), col3, currentY + 4, { width: 50, align: 'center' });
+        doc.text(`₹${Number(item.unitPrice || 0).toLocaleString('en-IN')}`, col4, currentY + 4, { width: 60, align: 'right' });
+        doc.text(`${Number(item.discountPercent || 0)}%`, col5, currentY + 4, { width: 50, align: 'center' });
+        doc.text(`₹${Number(item.lineTotal || 0).toLocaleString('en-IN')}`, col6, currentY + 4, { width: 60, align: 'right' });
+
+        doc.moveTo(col1 - 5, currentY + rowHeight).lineTo(pageWidth, currentY + rowHeight).stroke();
+        currentY += rowHeight;
+        rowNum++;
+      });
+
+      doc.moveDown(1);
+      const totalsX = 380;
+      const totalsY = doc.y + 8;
+      const taxRows = getSalesOrderTaxSummaryRows(order);
+
+      doc.fontSize(9).font('Helvetica');
+      doc.text('Subtotal:', totalsX, totalsY, { width: 80, align: 'right' });
+      doc.text(`₹${Number(order.totals?.subTotal || 0).toLocaleString('en-IN')}`, totalsX + 85, totalsY, { width: 60, align: 'right' });
+      taxRows.forEach((row, index) => {
+        doc.text(`${row.label}:`, totalsX, totalsY + 15 + index * 15, { width: 80, align: 'right' });
+        doc.text(`₹${Number(row.amount || 0).toLocaleString('en-IN')}`, totalsX + 85, totalsY + 15 + index * 15, { width: 60, align: 'right' });
+      });
+
+      const grandTotalBoxY = totalsY + 28 + ((taxRows.length - 1) * 15);
+      doc.rect(totalsX - 5, grandTotalBoxY, 180, 22).fillAndStroke('#b8bab3', '#cae8d1');
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('white');
+      doc.text('GRAND TOTAL:', totalsX + 2, grandTotalBoxY + 6, { width: 200, align: 'left' });
+      doc.text(`₹${Number(order.totals?.grandTotal || 0).toLocaleString('en-IN')}`, totalsX + 84, grandTotalBoxY + 6, { width: 200, align: 'left' });
+
+      doc.fillColor('black');
+      doc.moveDown(1);
+
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`Amount in Words: ${order.totals?.amountInWords || ''}`, 50, doc.y);
+      doc.moveDown(1);
+
+      doc.fontSize(10).font('Helvetica-Bold').text('Commercial Terms & Conditions', { underline: true });
+      doc.fontSize(8).font('Helvetica');
+      doc.text(`• Payment Terms: ${order.commercials?.paymentTerms || ''}`);
+      doc.text(`• Delivery Schedule: ${order.commercials?.deliverySchedule || ''}`);
+      doc.text(`• Shipping Charges: ${order.commercials?.shippingCharges || ''}`);
+      doc.moveDown(0.5);
+
+      const bankBoxTop = doc.y;
+      doc.rect(50, bankBoxTop, 500, 70).stroke();
+      doc.fontSize(10).font('Helvetica-Bold').text('Bank Details for Payment', 58, bankBoxTop + 5);
+      doc.fontSize(8).font('Helvetica');
+      const col1Bank = 58,
+        col2Bank = 280;
+      doc.text(`Account Name: ${order.bankDetails?.accountName || ''}`, col1Bank, bankBoxTop + 20);
+      doc.text(`Account Number: ${order.bankDetails?.accountNumber || ''} | Bank Name: ${order.bankDetails?.bankName || ''}`, col1Bank, bankBoxTop + 33);
+      doc.text(`GSTIN: ${order.company?.gstin || ''} | CIN: ${order.company?.companyId || ''}`, col1Bank, bankBoxTop + 46);
+      doc.text(`Branch: ${order.bankDetails?.branchAddress || ''}`, col1Bank, bankBoxTop + 59);
+
+      doc.moveDown(2);
+      doc.moveTo(47, doc.y).lineTo(550, doc.y).stroke();
+      doc.fontSize(8).font('Helvetica').text('Authorized Signatory', 50, doc.y + 10);
+      doc.text(order.signature?.authorizedPerson || '', 50, doc.y + 20);
+      doc.fontSize(7).font('Helvetica').fillColor('#666666');
+      doc.text(`This sales order is generated on ${new Date().toLocaleDateString('en-IN')}. Terms and conditions apply.`, 50, doc.y + 35, { align: 'center' });
+      doc.text(`Generated on ${new Date().toLocaleString('en-IN')} | Order ID: ${order.id}`, 50, doc.y + 10, { align: 'center' });
+      doc.text('© ' + (order.company?.name || '') + ' - Confidential', 50, doc.y + 5, { align: 'center' });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+app.get('/api/sales-orders/:id/pdf', requireAuth, async (req, res) => {
+  try {
+    const orders = await readSalesOrders();
+    const order = orders.find((q) => q.id === req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Sales order not found' });
+    }
+
+    const pdfBuffer = await createSalesOrderPDFBuffer(order);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="SalesOrder_${order.salesOrder?.salesOrderNumber || order.id}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Sales order PDF generation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/sales-orders/:id/send-email', requireAuth, async (req, res) => {
+  try {
+    const orders = await readSalesOrders();
+    const order = orders.find((q) => q.id === req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Sales order not found' });
+    }
+
+    if (!emailClient) {
+      return res.status(503).json({ error: 'Email service is not available' });
+    }
+
+    try {
+      const data = req.body || {};
+      if (!Array.isArray(data.recipients) || data.recipients.length === 0) {
+        return res.status(400).json({ error: 'At least one recipient is required' });
+      }
+
+      const subject = data.subject || `Sales Order ${order.salesOrder?.salesOrderNumber || order.id}`;
+      const message = data.message || '';
+      const emailSubject = subject;
+      const htmlText = generateSalesOrderEmailHTML(order, message);
+      const plainText = generateSalesOrderPlainText(order, message);
+      const toRecipients = data.recipients.map((email) => ({ address: String(email).trim() })).filter((r) => r.address);
+
+      const pdfBuffer = await createSalesOrderPDFBuffer(order);
+      const attachmentName = `SalesOrder_${order.salesOrder?.salesOrderNumber || order.id}.pdf`;
+      const attachments = [
+        {
+          name: attachmentName,
+          contentType: 'application/pdf',
+          contentInBase64: pdfBuffer.toString('base64'),
+        },
+      ];
+
+      if (Array.isArray(data.attachments)) {
+        for (const a of data.attachments) {
+          if (a && typeof a.name === 'string' && typeof a.contentInBase64 === 'string') {
+            attachments.push({
+              name: a.name,
+              contentType: a.contentType,
+              contentInBase64: a.contentInBase64,
+            });
+          }
+        }
+      }
+
+      const emailMessage = {
+        senderAddress: 'DoNotReply@4e025037-239a-4f46-88c6-0351eaf58bb5.azurecomm.net',
+        content: {
+          subject: emailSubject,
+          plainText,
+          html: htmlText,
+        },
+        recipients: { to: toRecipients },
+        attachments,
+      };
+
+      const poller = await emailClient.beginSend(emailMessage);
+      await poller.pollUntilDone();
+
+      res.json({ success: true, message: `Email sent to ${toRecipients.length} recipient(s)` });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      res.status(500).json({ error: 'Failed to send email: ' + emailError.message });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+function getSalesOrderTaxSummaryRows(order) {
+  const gstPercentage = Number(order?.taxes?.gstPercentage || 18);
+  const stateName = (order?.customer?.billTo?.state || order?.customer?.shipTo?.state || '').trim();
+  const isKarnataka = stateName.toLowerCase() === 'karnataka';
+  const gstAmount = Number(order?.totals?.gstAmount ?? order?.taxes?.gstAmount ?? 0);
+
+  if (isKarnataka) {
+    return [{ label: `GST (${gstPercentage}%)`, amount: gstAmount }];
+  }
+
+  const cgstAmount = Number(order?.totals?.cgstAmount ?? Math.round(gstAmount / 2));
+  const sgstAmount = Number(order?.totals?.sgstAmount ?? gstAmount - cgstAmount);
+
+  return [
+    { label: 'CGST (9%)', amount: cgstAmount },
+    { label: 'SGST (9%)', amount: sgstAmount },
+  ];
+}
+
+function generateSalesOrderEmailHTML(order, customMessage = '') {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 30px; color: white; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .content { padding: 30px; }
+        .greeting { font-size: 16px; margin-bottom: 20px; }
+        .message { background: #f9f9f9; padding: 15px; border-left: 4px solid #2c3e50; margin: 20px 0; border-radius: 4px; }
+        .summary { background: #ecf7ed; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        .summary-row { display: flex; justify-content: space-between; margin: 8px 0; }
+        .summary-label { font-weight: 600; }
+        .button { display: inline-block; background: #2c3e50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0; }
+        .footer { background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; }
+        .company-info { font-size: 13px; margin-top: 15px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 Sales Order ${order.salesOrder?.salesOrderNumber || order.id}</h1>
+            <p>From ${order.company?.name || ''}</p>
+        </div>
+        <div class="content">
+            <div class="greeting">
+                Dear ${order.customer?.customerName || 'Customer'},
+            </div>
+            <p>Thank you for your order. Please find the sales order acknowledgement attached for your reference.</p>
+            ${customMessage ? `<div class="message">${customMessage}</div>` : ''}
+            <div class="summary">
+                <div class="summary-row"><span class="summary-label">Order Number:</span><span>${order.salesOrder?.salesOrderNumber || order.id}</span></div>
+                <div class="summary-row"><span class="summary-label">Order Date:</span><span>${order.salesOrder?.salesOrderDate ? new Date(order.salesOrder.salesOrderDate).toLocaleDateString('en-IN') : ''}</span></div>
+                <div class="summary-row"><span class="summary-label">Delivery Date:</span><span>${order.salesOrder?.deliveryDate ? new Date(order.salesOrder.deliveryDate).toLocaleDateString('en-IN') : ''}</span></div>
+                <div class="summary-row"><span class="summary-label">Subtotal:</span><span>₹${Number(order.totals?.subTotal || 0).toLocaleString('en-IN')}</span></div>
+                ${getSalesOrderTaxSummaryRows(order).map((row) => `
+                <div class="summary-row"><span class="summary-label">${row.label}:</span><span>₹${Number(row.amount || 0).toLocaleString('en-IN')}</span></div>
+                `).join('')}
+                <div class="summary-row" style="border-top: 1px solid #ccc; padding-top: 8px; margin-top: 8px; font-weight: bold; font-size: 16px;"><span>Total Amount:</span><span>₹${Number(order.totals?.grandTotal || 0).toLocaleString('en-IN')}</span></div>
+            </div>
+            <p><strong>Items Summary:</strong></p>
+            <table style="width: 100%; font-size: 13px; margin: 15px 0; border-collapse: collapse;">
+                <tr style="background: #f5f5f5;"><th style="text-align: left; padding: 8px;">Product</th><th style="text-align: center; padding: 8px;">Qty</th><th style="text-align: right; padding: 8px;">Amount</th></tr>
+                ${ (order.items || []).map((item) => `
+                <tr><td style="padding: 8px;">${item.description || item.productName || '-'}</td><td style="text-align: center; padding: 8px;">${item.quantity || 0}</td><td style="text-align: right; padding: 8px;">₹${Number(item.lineTotal || 0).toLocaleString('en-IN')}</td></tr>
+                `).join('') }
+            </table>
+            <p><strong>Payment Terms:</strong> ${order.commercials?.paymentTerms || ''}</p>
+            <p><strong>Delivery Schedule:</strong> ${order.commercials?.deliverySchedule || ''}</p>
+            <p>Please review the attached sales order acknowledgement. If you have any questions or require changes, let us know.</p>
+            <p>Best regards,<br><strong>${order.salesOrder?.salesPerson?.name || ''}</strong><br>${order.company?.name || ''}<br>Phone: ${order.salesOrder?.salesPerson?.phone || ''}</p>
+            <div class="company-info"><div>${order.company?.address || ''}</div><div>GSTIN: ${order.company?.gstin || ''}</div></div>
+        </div>
+        <div class="footer">
+            <p>© ${new Date().getFullYear()} ${order.company?.name || ''}. All rights reserved.</p>
+            <p>This sales order acknowledgement is confidential and intended for the recipient only.</p>
+        </div>
+    </div>
+</body>
+</html>
+  `;
+}
+
+function generateSalesOrderPlainText(order, customMessage = '') {
+  return `
+SALES ORDER ${order.salesOrder?.salesOrderNumber || order.id}
+${'='.repeat(50)}
+
+Dear ${order.customer?.customerName || 'Customer'},
+
+Thank you for your order. Please find the attached sales order acknowledgement for your reference.
+
+${customMessage ? customMessage + '\n\n' : ''}
+ORDER DETAILS
+Order Number: ${order.salesOrder?.salesOrderNumber || order.id}
+Order Date: ${order.salesOrder?.salesOrderDate ? new Date(order.salesOrder.salesOrderDate).toLocaleDateString('en-IN') : ''}
+Delivery Date: ${order.salesOrder?.deliveryDate ? new Date(order.salesOrder.deliveryDate).toLocaleDateString('en-IN') : ''}
+
+ITEMS
+${(order.items || []).map((item) => `${item.description || item.productName || '-'}${item.unitMeasurements ? ` (${item.unitMeasurements})` : ''}
+  Quantity: ${item.quantity || 0}
+  Unit Price: ₹${Number(item.unitPrice || 0).toLocaleString('en-IN')}
+  Discount: ${Number(item.discountPercent || 0)}%
+  Line Total: ₹${Number(item.lineTotal || 0).toLocaleString('en-IN')}`).join('\n\n')}
+
+TOTALS
+Subtotal: ₹${Number(order.totals?.subTotal || 0).toLocaleString('en-IN')}
+${getSalesOrderTaxSummaryRows(order).map((row) => `${row.label}: ₹${Number(row.amount || 0).toLocaleString('en-IN')}`).join('\n')}
+GRAND TOTAL: ₹${Number(order.totals?.grandTotal || 0).toLocaleString('en-IN')}
+
+COMMERCIAL TERMS
+Payment Terms: ${order.commercials?.paymentTerms || ''}
+Delivery Schedule: ${order.commercials?.deliverySchedule || ''}
+Shipping Charges: ${order.commercials?.shippingCharges || ''}
+
+COMPANY INFORMATION
+${order.company?.name || ''}
+${order.company?.address || ''}
+GSTIN: ${order.company?.gstin || ''}
+
+Please review the attached sales order acknowledgement.
+
+Best regards,
+${order.salesOrder?.salesPerson?.name || ''}
+Phone: ${order.salesOrder?.salesPerson?.phone || ''}
+
+© ${new Date().getFullYear()} ${order.company?.name || ''}. All rights reserved.
+`;
+}
 
 function getTaxSummaryRows(quote) {
   const gstPercentage = Number(quote?.taxes?.gstPercentage || 18);

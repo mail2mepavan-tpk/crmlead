@@ -10,6 +10,7 @@ import {
   calculateGrandTotal,
   numberToWords,
 } from '../utils/quoteStorage';
+import { createFromQuote } from '../utils/salesOrderStorage';
 import { getDealById } from '../utils/dealStorage';
 import { getProducts } from '../utils/productStorage';
 import { useAuth } from '../context/AuthContext';
@@ -390,6 +391,20 @@ export default function QuotationForm() {
       setErrors({ submit: err.message || 'Error saving quotation' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleConvert = async () => {
+    if (!isEditing) {
+      alert('Please save the quotation first before converting.');
+      return;
+    }
+    if (!window.confirm(`Convert quotation "${formData.quotation.quoteNumber}" to a Sales Order?`)) return;
+    try {
+      const order = await createFromQuote(id);
+      navigate(`/sales-orders/${order.id}/edit`);
+    } catch (err) {
+      setErrors({ submit: err.message || 'Error converting quotation' });
     }
   };
 
@@ -1071,6 +1086,15 @@ export default function QuotationForm() {
             >
               Cancel
             </button>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={handleConvert}
+                className="rounded border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 transition-all hover:bg-amber-100"
+              >
+                Convert to Sales Order
+              </button>
+            )}
             <button
               type="submit"
               disabled={saving}

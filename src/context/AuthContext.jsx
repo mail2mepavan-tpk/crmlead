@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { loginUser } from '../utils/userStorage';
+import { apiRequest } from '../utils/api';
 
 const AuthContext = createContext(null);
 const SESSION_KEY = 'crm_current_user';
@@ -28,7 +29,12 @@ export function AuthProvider({ children }) {
     return user;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore errors - still clear session locally
+    }
     sessionStorage.removeItem(SESSION_KEY);
     setCurrentUser(null);
   };

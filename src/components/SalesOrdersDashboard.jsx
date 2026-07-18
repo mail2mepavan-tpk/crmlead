@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   FileText,
   Plus,
@@ -12,14 +12,12 @@ import {
   Eye,
 } from 'lucide-react';
 import {
-  getQuotes,
-  deleteQuote,
-  getQuotesSummary,
-  sendQuoteEmail,
-  generateQuotePDF,
-} from '../utils/quoteStorage';
-import { createFromQuote } from '../utils/salesOrderStorage';
-import { useAuth } from '../context/AuthContext';
+  getSalesOrders,
+  deleteSalesOrder,
+  getSalesOrdersSummary,
+  generateSalesOrderPDF,
+  sendSalesOrderEmail,
+} from '../utils/salesOrderStorage';
 
 const statusColors = {
   'Pending': 'bg-amber-100 text-amber-800 border-amber-300',
@@ -28,100 +26,79 @@ const statusColors = {
   'Rejected': 'bg-red-100 text-red-800 border-red-300',
 };
 
-const modalButtonClass =
-  'rounded border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50';
-
-export default function QuotationsDashboard() {
-  const { isAdmin } = useAuth();
-  const [quotes, setQuotes] = useState([]);
-  const [summary, setSummary] = useState({ total: 0, pending: 0, sent: 0, accepted: 0, rejected: 0 });
+export default function SalesOrdersDashboard() {
+  const [orders, setOrders] = useState([]);
+  const [summary, setSummary] = useState({ totalOrders: 0, totalOrderAmount: 0 });
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [popup, setPopup] = useState({ type: '', quote: null });
+  const [popup, setPopup] = useState({ type: '', order: null });
   const [emailForm, setEmailForm] = useState({ recipients: '', subject: '' });
   const [attachments, setAttachments] = useState([]);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailError, setEmailError] = useState('');
 
   useEffect(() => {
-    //if(sessionStorage.getItem('crm_current_user') && JSON.parse(sessionStorage.getItem('crm_current_user')).role.toLowerCase() === 'executive') return;
-    loadQuotes();
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const data = await getSalesOrders();
+        setOrders(data);
+        setSummary(getSalesOrdersSummary(data));
+      } catch (err) {
+        setError(err.message || 'Failed to load sales orders');
+        setOrders([]);
+        setSummary({ totalOrders: 0, totalOrderAmount: 0 });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
   }, []);
 
-  const loadQuotes = async () => {
+  async function loadOrders() {
     try {
       setLoading(true);
       setError('');
-      const data = await getQuotes();
-      setQuotes(data);
-      setSummary(getQuotesSummary(data));
+      const data = await getSalesOrders();
+      setOrders(data);
+      setSummary(getSalesOrdersSummary(data));
     } catch (err) {
-      setError(err.message || 'Failed to load quotes');
-      setQuotes([]);
-      setSummary({ total: 0, pending: 0, sent: 0, accepted: 0, rejected: 0 });
+      setError(err.message || 'Failed to load sales orders');
+      setOrders([]);
+      setSummary({ totalOrders: 0, totalOrderAmount: 0 });
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const navigate = useNavigate();
-
-  const handleConvert = async (quote) => {
-    if (!window.confirm(`Convert quotation "${quote.quotation?.quoteNumber}" to a Sales Order?`)) return;
-    try {
-      const order = await createFromQuote(quote.id);
-      // navigate to edit page for the created sales order
-      navigate(`/sales-orders/${order.id}/edit`);
-    } catch (err) {
-      alert('Error converting quotation: ' + err.message);
-    }
-  };
-
-  const handleDelete = async (id, quoteNumber) => {
-    if (!window.confirm(`Delete quotation "${quoteNumber}"? This cannot be undone.`)) {
+  const handleDelete = async (id, orderNumber) => {
+    if (!window.confirm(`Delete sales order "${orderNumber}"? This cannot be undone.`)) {
       return;
     }
 
     try {
-      await deleteQuote(id);
-      await loadQuotes();
+      await deleteSalesOrder(id);
+      await loadOrders();
     } catch (err) {
-      alert('Error deleting quotation: ' + err.message);
+      alert('Error deleting sales order: ' + err.message);
     }
   };
 
-  const handleDownloadPDF = async (quote) => {
-    try {
-      const response = await generateQuotePDF(quote.id);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Quote_${quote.quotation.quoteNumber}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      }
-    } catch (err) {
-      alert('Error downloading PDF: ' + err.message);
-    }
-  };
-
-  const handleViewPDF = async (quote) => {
-    try {
-      const response = await generateQuotePDF(quote.id);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        window.open(url, '_blank');
-      }
-    } catch (err) {
-      alert('Error viewing PDF: ' + err.message);
-    }
-  };
+  const filtered = orders.filter((order) => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    return [
+      order.salesOrder?.salesOrderNumber,
+      order.customer?.customerName,
+      order.customer?.email,
+      order.status,
+    ]
+      .filter(Boolean)
+      .some((field) => String(field).toLowerCase().includes(term));
+  });
 
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
@@ -130,40 +107,8 @@ export default function QuotationsDashboard() {
     return `${(bytes / 1024 ** index).toFixed(1)} ${units[index]}`;
   };
 
-  const readFileAsBase64 = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = String(reader.result).split(',')[1] || '';
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-  // const handleAttachmentChange = async (event) => {
-  //   const files = Array.from(event.target.files || []);
-  //   if (files.length === 0) return;
-  //   try {
-  //     const newAttachments = await Promise.all(
-  //       files.map(async (file) => ({
-  //         name: file.name,
-  //         contentType: file.type || 'application/octet-stream',
-  //         contentInBase64: await readFileAsBase64(file),
-  //         size: file.size,
-  //       }))
-  //     );
-  //     setAttachments((prev) => [...prev, ...newAttachments]);
-  //   } catch (err) {
-  //     setEmailError('Failed to read attachments.');
-  //   } finally {
-  //     event.target.value = '';
-  //   }
-  // };
-
   const handleAttachmentChange = (event) => {
     const files = Array.from(event.target.files || []);
-
     const readFiles = files.map(
       (file) =>
         new Promise((resolve, reject) => {
@@ -173,6 +118,7 @@ export default function QuotationsDashboard() {
               name: file.name,
               contentType: file.type || 'application/octet-stream',
               contentInBase64: reader.result.split(',')[1],
+              size: file.size,
             });
           };
           reader.onerror = () => reject(new Error(`Unable to read ${file.name}`));
@@ -183,14 +129,45 @@ export default function QuotationsDashboard() {
     Promise.all(readFiles)
       .then((resolvedFiles) => {
         setAttachments(resolvedFiles);
-        setStatus('Attachments prepared.');
       })
       .catch((attachmentError) => {
-        setError(attachmentError.message);
+        setEmailError(attachmentError.message);
       });
   };
 
   const removeAttachment = (index) => setAttachments((prev) => prev.filter((_, i) => i !== index));
+
+  const handleDownloadPDF = async (order) => {
+    try {
+      const response = await generateSalesOrderPDF(order.id);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `SalesOrder_${order.salesOrder?.salesOrderNumber || order.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      alert('Error downloading PDF: ' + err.message);
+    }
+  };
+
+  const handleViewPDF = async (order) => {
+    try {
+      const response = await generateSalesOrderPDF(order.id);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      }
+    } catch (err) {
+      alert('Error viewing PDF: ' + err.message);
+    }
+  };
 
   const handleSendEmail = async () => {
     if (!emailForm.recipients.trim()) {
@@ -207,10 +184,13 @@ export default function QuotationsDashboard() {
         .map((e) => e.trim())
         .filter(Boolean);
 
-      await sendQuoteEmail(popup.quote.id, { recipients, subject: emailForm.subject, attachments });
+      await sendSalesOrderEmail(popup.order.id, {
+        recipients,
+        subject: emailForm.subject,
+        attachments,
+      });
 
-      await loadQuotes();
-      setPopup({ type: '', quote: null });
+      setPopup({ type: '', order: null });
       setEmailForm({ recipients: '', subject: '' });
       setAttachments([]);
       alert('Email sent successfully!');
@@ -220,19 +200,6 @@ export default function QuotationsDashboard() {
       setSendingEmail(false);
     }
   };
-
-  const filtered = quotes.filter((quote) => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return true;
-    return [
-      quote.quotation?.quoteNumber,
-      quote.customer?.customerName,
-      quote.customer?.email,
-      quote.status,
-    ]
-      .filter(Boolean)
-      .some((field) => String(field).toLowerCase().includes(term));
-  });
 
   if (loading) {
     return (
@@ -247,17 +214,17 @@ export default function QuotationsDashboard() {
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-800">Quotations</h2>
+            <h2 className="text-2xl font-semibold text-slate-800">Sales Orders</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Create and manage customer quotations with PDF generation and email delivery.
+              Create and manage sales orders converted from quotations.
             </p>
           </div>
           <Link
-            to="/quotations/new"
+            to="/sales-orders/new"
             className="inline-flex items-center gap-2 rounded bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white no-underline transition-all hover:bg-sky-600"
           >
             <Plus className="size-4" />
-            New Quotation
+            New Sales Order
           </Link>
         </div>
 
@@ -267,50 +234,19 @@ export default function QuotationsDashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-5">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div className="flex items-center gap-4 rounded-lg bg-white p-5 shadow-sm">
             <FileText className="size-10 shrink-0 text-brand" />
             <div>
               <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                Total
+                Total Order Amount
               </p>
-              <p className="mt-2 text-3xl font-bold text-slate-800">{summary.total}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 rounded-lg bg-white p-5 shadow-sm">
-            <FileText className="size-10 shrink-0 text-amber-500" />
-            <div>
-              <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                Pending
+              <p className="mt-2 text-3xl font-bold text-slate-800">
+                ₹{summary.totalOrderAmount.toLocaleString('en-IN')}
               </p>
-              <p className="mt-2 text-3xl font-bold text-slate-800">{summary.pending}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 rounded-lg bg-white p-5 shadow-sm">
-            <FileText className="size-10 shrink-0 text-blue-500" />
-            <div>
-              <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                Sent
+              <p className="mt-1 text-sm text-slate-500">
+                {summary.totalOrders} sales orders
               </p>
-              <p className="mt-2 text-3xl font-bold text-slate-800">{summary.sent}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 rounded-lg bg-white p-5 shadow-sm">
-            <FileText className="size-10 shrink-0 text-emerald-500" />
-            <div>
-              <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                Accepted
-              </p>
-              <p className="mt-2 text-3xl font-bold text-slate-800">{summary.accepted}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 rounded-lg bg-white p-5 shadow-sm">
-            <FileText className="size-10 shrink-0 text-red-500" />
-            <div>
-              <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                Rejected
-              </p>
-              <p className="mt-2 text-3xl font-bold text-slate-800">{summary.rejected}</p>
             </div>
           </div>
         </div>
@@ -321,7 +257,7 @@ export default function QuotationsDashboard() {
               <Search className="size-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search by quote number, customer, email, or status..."
+                placeholder="Search by order number, customer, email, or status..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
@@ -333,7 +269,7 @@ export default function QuotationsDashboard() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Quote #</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Order #</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Customer</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Amount</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-slate-700">Status</th>
@@ -345,45 +281,45 @@ export default function QuotationsDashboard() {
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="px-6 py-8 text-center text-sm text-slate-500">
-                      No quotations found
+                      No sales orders found
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((quote) => (
-                    <tr key={quote.id} className="border-b border-slate-200 hover:bg-slate-50">
+                  filtered.map((order) => (
+                    <tr key={order.id} className="border-b border-slate-200 hover:bg-slate-50">
                       <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                        {quote.quotation?.quoteNumber}
+                        {order.salesOrder?.salesOrderNumber || order.id}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
-                        <div>{quote.customer?.customerName}</div>
-                        <div className="text-xs text-slate-500">{quote.customer?.email}</div>
+                        <div>{order.customer?.customerName}</div>
+                        <div className="text-xs text-slate-500">{order.customer?.email}</div>
                       </td>
                       <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                        ₹{quote.totals?.grandTotal?.toLocaleString('en-IN')}
+                        ₹{order.totals?.grandTotal?.toLocaleString('en-IN')}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span
                           className={`inline-block rounded-full px-3 py-1 text-xs font-medium border ${
-                            statusColors[quote.status] || 'bg-slate-100 text-slate-800 border-slate-300'
+                            statusColors[order.status] || 'bg-slate-100 text-slate-800 border-slate-300'
                           }`}
                         >
-                          {quote.status || 'Pending'}
+                          {order.status || 'Pending'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
-                        {new Date(quote.quotation?.quotationDate).toLocaleDateString('en-IN')}
+                        {order.salesOrder?.salesOrderDate ? new Date(order.salesOrder.salesOrderDate).toLocaleDateString('en-IN') : ''}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleViewPDF(quote)}
+                            onClick={() => handleViewPDF(order)}
                             className="rounded p-2 hover:bg-slate-100 transition-colors"
                             title="View PDF"
                           >
                             <Eye className="size-4 text-slate-600" />
                           </button>
                           <button
-                            onClick={() => handleDownloadPDF(quote)}
+                            onClick={() => handleDownloadPDF(order)}
                             className="rounded p-2 hover:bg-slate-100 transition-colors"
                             title="Download PDF"
                           >
@@ -391,38 +327,31 @@ export default function QuotationsDashboard() {
                           </button>
                           <button
                             onClick={() => {
-                                setPopup({ type: 'email', quote });
-                                setEmailForm({
-                                  recipients: quote.customer?.email || '',
-                                  subject: `Quotation ${quote.quotation?.quoteNumber}`,
-                                });
-                                setAttachments([]);
-                              }}
+                              setPopup({ type: 'email', order });
+                              setEmailForm({
+                                recipients: order.customer?.email || '',
+                                subject: `Sales Order ${order.salesOrder?.salesOrderNumber}`,
+                              });
+                              setAttachments([]);
+                            }}
                             className="rounded p-2 hover:bg-slate-100 transition-colors"
                             title="Send Email"
                           >
                             <Mail className="size-4 text-slate-600" />
                           </button>
                           <Link
-                            to={`/quotations/${quote.id}/edit`}
+                            to={`/sales-orders/${order.id}/edit`}
                             className="rounded p-2 hover:bg-slate-100 transition-colors"
                             title="Edit"
                           >
                             <Pencil className="size-4 text-slate-600" />
                           </Link>
                           <button
-                            onClick={() => handleConvert(quote)}
-                            className="rounded p-2 hover:bg-slate-100 transition-colors"
-                            title="Convert to Sales Order"
-                          >
-                            <FileText className="size-4 text-slate-600" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(quote.id, quote.quotation?.quoteNumber)}
+                            onClick={() => handleDelete(order.id, order.salesOrder?.salesOrderNumber || order.id)}
                             className="rounded p-2 hover:bg-slate-100 transition-colors"
                             title="Delete"
                           >
-                            <Trash2 className="size-4 text-red-600" />
+                            <Trash2 className="size-4 text-slate-600" />
                           </button>
                         </div>
                       </td>
@@ -435,14 +364,11 @@ export default function QuotationsDashboard() {
         </div>
       </div>
 
-      {/* Email Modal */}
       {popup.type === 'email' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-md rounded-lg bg-white shadow-lg">
             <div className="border-b border-slate-200 px-6 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">
-                Send Quotation Email
-              </h3>
+              <h3 className="text-lg font-semibold text-slate-900">Send Order Acknowledgement Email</h3>
             </div>
 
             <div className="space-y-4 px-6 py-4">
@@ -466,9 +392,7 @@ export default function QuotationsDashboard() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Subject
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
                 <input
                   type="text"
                   value={emailForm.subject}
@@ -478,13 +402,11 @@ export default function QuotationsDashboard() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Attach additional PDFs
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Attach additional PDFs</label>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => document.getElementById('quote-attach-input')?.click()}
+                    onClick={() => document.getElementById('sales-order-attach-input')?.click()}
                     className="inline-flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     Attach PDFs
@@ -492,7 +414,7 @@ export default function QuotationsDashboard() {
                   <span className="text-xs text-slate-500">PDF only — up to 5 files</span>
                 </div>
                 <input
-                  id="quote-attach-input"
+                  id="sales-order-attach-input"
                   type="file"
                   accept="application/pdf"
                   multiple
@@ -524,8 +446,8 @@ export default function QuotationsDashboard() {
 
             <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button
-                onClick={() => setPopup({ type: '', quote: null })}
-                className={modalButtonClass}
+                onClick={() => setPopup({ type: '', order: null })}
+                className="rounded border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 disabled={sendingEmail}
               >
                 Cancel

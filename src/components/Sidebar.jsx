@@ -124,6 +124,12 @@ export default function Sidebar({ isOpen, onClose }) {
                   icon={FileText}
                   label="Quotations"
                 />
+               <NavItem
+                  to="/sales-orders"
+                  onClose={onClose}
+                  icon={ArrowUpRight}
+                  label="Sales Orders"
+                />
           </div>
 
            {(isDirector || isAdmin) && (

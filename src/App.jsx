@@ -20,6 +20,8 @@ import DealsDashboard from './components/DealsDashboard';
 import DealForm from './components/DealForm';
 import QuotationsDashboard from './components/QuotationsDashboard';
 import QuotationForm from './components/QuotationForm';
+import SalesOrdersDashboard from './components/SalesOrdersDashboard';
+import SalesOrderForm from './components/SalesOrderForm';
 import RevenueDashboard from './components/RevenueDashboard';
 import ProductsDashboard from './components/ProductsDashboard';
 import ProductForm from './components/ProductForm';
@@ -63,6 +65,10 @@ export default function EnquiryManagementSystem() {
             <Route path="/quotations/new" element={<QuotationForm />} />
             <Route path="/quotations/:id/edit" element={<QuotationForm />} />
             <Route path="/quotations/new/deal/:dealId" element={<QuotationForm />} />
+            <Route path="/sales-orders" element={<SalesOrdersDashboard />} />
+            <Route path="/sales-orders/new" element={<SalesOrderForm />} />
+            <Route path="/sales-orders/:id/edit" element={<SalesOrderForm />} />
+            <Route path="/sales-orders/new/deal/:dealId" element={<SalesOrderForm />} />
             <Route path="/revenue" element={<RevenueDashboard />} />
             <Route element={<AdminRoute />}>
               <Route path="/users" element={<UsersDashboard />} />
