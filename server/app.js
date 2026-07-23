@@ -3238,6 +3238,52 @@ app.post('/api/sales-orders/:id/send-email', requireAuth, async (req, res) => {
   }
 });
 
+const VERIFY_TOKEN = "satviansolutions"; // Create your own custom password string
+
+// 1. GET Endpoint for Meta Verification
+app.get('/webhook', (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode && token) {
+        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+            console.log('Webhook successfully verified by Meta!');
+            return res.status(200).send(challenge);
+        } else {
+            return res.sendStatus(403);
+        }
+    }
+});
+
+// 2. POST Endpoint to Read Incoming Messages
+app.post('/webhook', (req, res) => {
+    const body = req.body;
+
+    // Check if the webhook event is a WhatsApp message entry
+    if (body.object === 'whatsapp_business_account') {
+        if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages) {
+            
+            const messageData = body.entry[0].changes[0].value.messages[0];
+            const fromNumber = messageData.from; // Sender phone number
+            const messageType = messageData.type; // text, image, document etc.
+
+            if (messageType === 'text') {
+                const messageText = messageData.text.body;
+                console.log(`New Message from ${fromNumber}: ${messageText}`);
+                
+                // INSERT CODE HERE TO SAVE THE MESSAGE TO YOUR DATABASE
+            } else {
+                console.log(`Received a non-text message of type: ${messageType}`);
+            }
+        }
+        // Always return a 200 OK to Meta so they don't retry sending the same payload
+        return res.status(200).send('EVENT_RECEIVED');
+    } else {
+        return res.sendStatus(404);
+    }
+});
+
 function getSalesOrderTaxSummaryRows(order) {
   const gstPercentage = Number(order?.taxes?.gstPercentage || 18);
   const stateName = (order?.customer?.billTo?.state || order?.customer?.shipTo?.state || '').trim();

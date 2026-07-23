@@ -216,16 +216,9 @@ export default function SalesOrdersDashboard() {
           <div>
             <h2 className="text-2xl font-semibold text-slate-800">Sales Orders</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Create and manage sales orders converted from quotations.
+              Manage sales orders converted from quotations.
             </p>
           </div>
-          {/* <Link
-            to="/sales-orders/new"
-            className="inline-flex items-center gap-2 rounded bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white no-underline transition-all hover:bg-sky-600"
-          >
-            <Plus className="size-4" />
-            New Sales Order
-          </Link> */}
         </div>
 
         {error && (
