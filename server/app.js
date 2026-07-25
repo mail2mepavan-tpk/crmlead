@@ -3260,11 +3260,10 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', (req, res) => {
     const body = req.body;
     // insert into db name # whatsapp
-     await writeUpdate('whatsappmessages', {
+     await writeTable('whatsappmessages', {
       message_text: JSON.stringify(body),
       create_date: new Date().toISOString()
     });
-    console.log('Received webhook event:', JSON.stringify(body, null, 2));
     // Check if the webhook event is a WhatsApp message entry
     if (body.object === 'whatsapp_business_account') {
         if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages) {
