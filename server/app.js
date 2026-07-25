@@ -3260,7 +3260,7 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', (req, res) => {
     const body = req.body;
     // insert into db name # whatsapp
-     await writeTable('whatsappmessages', {
+      writeTable('whatsappmessages', {
       message_text: JSON.stringify(body),
       create_date: new Date().toISOString()
     });
