@@ -199,6 +199,40 @@ async function  writeTable(tableName, rows) {
   }
 }
 
+async function  writeTableWhatsapp(messageText) {
+  if (!Array.isArray(rows)) {
+    throw new Error('Data must be an array');
+  }
+  const pool = await getDbPool();
+  const transaction = new sql.Transaction(pool);
+
+  try {
+    await transaction.begin();
+    const insertRequest = transaction.request();
+    const query = `INSERT INTO ${tableName} ('message_text','create_date') VALUES 
+    (messageText, new Date().toISOString())`;
+    await insertRequest.query(query);
+
+    // for (const row of rows) {
+    //   const columnEntries = getUniqueColumnEntries(row);
+    //   if (columnEntries.length === 0) {
+    //     continue;
+    //   }
+    //   const columnList = columnEntries.map(([name]) => `[${name}]`).join(', ');
+    //   const insertRequest = transaction.request();
+    //   const bindings = createSqlBindings(insertRequest, Object.fromEntries(columnEntries));
+    //   const valueList = bindings.map((binding) => `@${binding.paramName}`).join(', ');
+    //   const query = `INSERT INTO ${tableName} (${columnList}) VALUES (${valueList})`;
+    //   await insertRequest.query(query);
+    // }
+
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
 async function writeUpdate(tableName, row) {
   if (!row || typeof row !== 'object') {
     throw new Error('Row must be an object');
@@ -3259,11 +3293,8 @@ app.get('/webhook', (req, res) => {
 // 2. POST Endpoint to Read Incoming Messages
 app.post('/webhook', (req, res) => {
     const body = req.body;
-    // insert into db name # whatsapp
-      writeTable('whatsappmessages', {
-      message_text: JSON.stringify(body),
-      create_date: new Date().toISOString()
-    });
+    writeTableWhatsapp('{"test": {"test":"test"}}');
+    writeTableWhatsapp(JSON.stringify(body));
     // Check if the webhook event is a WhatsApp message entry
     if (body.object === 'whatsapp_business_account') {
         if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages) {
