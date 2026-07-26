@@ -200,34 +200,18 @@ async function  writeTable(tableName, rows) {
 }
 
 async function  writeTableWhatsapp(messageText) {
-  if (!Array.isArray(rows)) {
-    throw new Error('Data must be an array');
-  }
+
   const pool = await getDbPool();
   const transaction = new sql.Transaction(pool);
 
   try {
     await transaction.begin();
     const insertRequest = transaction.request();
-    const query = `INSERT INTO ${tableName} ('message_text','create_date') VALUES 
-    (messageText, new Date().toISOString())`;
+    const query = `INSERT INTO dbo.whatsappmessages ('message_text','create_date') VALUES 
+    (${messageText}, ${new Date().toISOString()})`;
     await insertRequest.query(query);
-
-    // for (const row of rows) {
-    //   const columnEntries = getUniqueColumnEntries(row);
-    //   if (columnEntries.length === 0) {
-    //     continue;
-    //   }
-    //   const columnList = columnEntries.map(([name]) => `[${name}]`).join(', ');
-    //   const insertRequest = transaction.request();
-    //   const bindings = createSqlBindings(insertRequest, Object.fromEntries(columnEntries));
-    //   const valueList = bindings.map((binding) => `@${binding.paramName}`).join(', ');
-    //   const query = `INSERT INTO ${tableName} (${columnList}) VALUES (${valueList})`;
-    //   await insertRequest.query(query);
-    // }
-
     await transaction.commit();
-  } catch (error) {
+  } catch (error) {``
     await transaction.rollback();
     throw error;
   }
