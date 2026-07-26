@@ -207,7 +207,7 @@ async function  writeTableWhatsapp(messageText) {
   try {
     await transaction.begin();
     const insertRequest = transaction.request();
-    const query = `INSERT INTO dbo.whatsappmessages ('message_text','create_date') VALUES 
+    const query = `INSERT INTO dbo.whatsappmessages (message_text, create_date) VALUES 
     (${messageText}, ${new Date().toISOString()})`;
     await insertRequest.query(query);
     await transaction.commit();
