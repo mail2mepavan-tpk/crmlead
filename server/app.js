@@ -3277,8 +3277,13 @@ app.get('/webhook', (req, res) => {
 // 2. POST Endpoint to Read Incoming Messages
 app.post('/webhook', (req, res) => {
     const body = req.body;
-    writeTableWhatsapp('{"test": {"test":"test"}}');
-    writeTableWhatsapp(JSON.stringify(body));
+    try{
+      writeTableWhatsapp('{\"test\": {\`"test\":\"test\"}}');
+      writeTableWhatsapp(JSON.stringify(body));
+    }catch(err){
+      console.error('Error writing to WhatsApp table:', err);
+      res.status(500).send('Error processing the webhook' + err.message);
+    }
     // Check if the webhook event is a WhatsApp message entry
     if (body.object === 'whatsapp_business_account') {
         if (body.entry && body.entry[0].changes && body.entry[0].changes[0].value.messages) {
@@ -3300,6 +3305,16 @@ app.post('/webhook', (req, res) => {
         return res.status(200).send('EVENT_RECEIVED');
     } else {
         return res.sendStatus(404);
+    }
+});
+
+app.post('/webhook1', (req, res) => {
+    const body = req.body;
+    try{
+      writeTableWhatsapp(JSON.stringify(body));
+    }catch(err){
+      console.error('Error writing to WhatsApp table:', err);
+     res.status(500).send('Error processing the webhook' + err.message);
     }
 });
 
